@@ -1,0 +1,308 @@
+<html>
+
+<!--=======================================================================-->
+
+<head>
+  <title>Aero</title>
+  <script type='text/javascript' src='http://epilog.stanford.edu/javascript/epilog.js'></script>
+  <script type='text/javascript' src='http://gamemaster.stanford.edu/javascript/localstorage.js'></script>
+  <script type='text/javascript' src='http://gamemaster.stanford.edu/interpreter/general.js'></script>
+  <script type='text/javascript'>
+//==============================================================================
+
+
+var manager = 'manager';
+var player = 'aero';
+
+var role = 'robot';
+var rules = [];
+var startclock = 10;
+var playclock = 10;
+
+var library = [];
+var roles = [];
+var state = [];
+
+//==============================================================================
+/*
+Writeup:
+
+1. The legal player was already supplied as the sample player from the website. Simply uploading it
+to gamemaster in the html file under our player's name completed this part of the assignment.
+
+2. The random player was very similar, but the play function had one difference, as noted in 
+class and in the class slides. Instead of simply finding a legal action, we find all legal actions
+and return a randomly chosen one as:
+"return findlegals(state,library)[randomindex(findlegals(state,library).length)]"
+
+3. We then implemented a minimax player for single player games. This looks a lot like the 2 player
+minimax code in the commented out section below, but we only maximize until we get to the end of the 
+game tree. Namely, we look at the current game state and recurse down the game tree looking for the path
+that yields the optimal end reward. Since there is no adversarial player, we simply pick an action 
+that will yield the optimal reward. Since rewards are bound between 0 and 100, we can end the recursion
+early once we find a branch that gives a reward of 100. This helps speed up play time.
+
+4. The minimax player for 2 player games we implemented considers the current game state, and then
+for all possible moves recursively calls the minimax function in the following game state, alternating 
+whether the current player is active or not with each layer of recursion. If the current player
+is active, the minimax player tries to maximize the reward function; otherwise, the minimax
+player tries to minimize the reward function. Our implementation searches the entire game 
+tree for all possible terminal states and chooses whichever state is reached by the minimax 
+algorithm. The code for this implemntation is the following functions commented out below:
+ maximize, minimize, bestmove, and minimax.
+
+5. The maximax player our group implemented considers the current game state and current player,
+and then for all possible moves recursively calls the maximax function for the following game 
+state and the next player. The maximax player chooses the move that maximizes the function for 
+the current player. Our implementation searches the entire game tree for all possible terminal 
+states before making its decision, stopping early if it finds a tree that yields a result of 100
+The code is the currently active / not commented out code below, which closely follows the code from lecture.
+
+We note that this implementation does not have a timing mechanism and will time out on more complex
+games where the 10-20 seconds of play time are not enough to explore the whole tree. It can also 
+time out sometimes when going first on tictactoe
+
+*/
+//==============================================================================
+
+
+/* MINIMAX PLAYER COMPLETE
+function maximize(curState) {
+  var actions = findlegals(curState, library);
+  if (actions.length === 0) {return 0;}
+  
+  var score = -1;
+  for (var i = 0; i < actions.length; i++) {
+    var newstate = simulate(actions[i], curState, library);
+    var newscore = minimax(newstate);
+    if (Number(newscore) > Number(score)) {score = newscore;}
+  }
+  return score;
+}
+
+function minimize(curState) {
+  var opponent = roles.filter(r => r !== role)[0];
+  var actions = findlegals(curState, library);
+  if (actions.length === 0) {return 0;}
+  
+  var score = 101; 
+  for (var i = 0; i < actions.length; i++) {
+    var newstate = simulate(actions[i], curState, library);
+    var newscore = minimax(newstate);
+    if (Number(newscore) < Number(score)) {score = newscore;}
+  }
+  return score;
+}
+
+function bestmove(curState) {
+  var actions = findlegals(curState, library);
+  if (actions.length === 0) {return null;}
+  
+  var bestAction = null;
+  var bestScore = -1;
+  
+  for (var i = 0; i < actions.length; i++) {
+    var newstate = simulate(actions[i], curState, library);
+    var newscore = minimax(newstate);
+
+    if (Number(newscore) > Number(bestScore)) {
+      bestScore = Number(newscore);
+      bestAction = actions[i];
+    }
+  }
+
+  return bestAction;
+}
+
+function minimax(curState) {
+  if (findterminalp(curState, library)) {
+    return findreward(role, curState, library);
+  }
+  
+  var active = findcontrol(curState, library);
+  if (active === role) {
+    return maximize(curState);
+  } else {
+    return minimize(curState);
+  }
+}
+*/
+
+
+var isFirstMove = true;
+
+function maximax(state) {
+  //Return rewards for each role at terminal state
+  if (findterminalp(state, library)) {
+    var vector = {};
+    for (var i = 0; i < roles.length; i++) {
+      vector[roles[i]] = findreward(roles[i], state, library) * 1;
+    }
+    return vector;
+  }
+  var active = findcontrol(state, library);
+  var actions = findlegals(state, library);
+  var vector = {};
+  for (var i = 0; i < roles.length; i++) {
+    vector[roles[i]] = -1;
+  }
+  // loop over potential actions and recurse
+  for (var i = 0; i < actions.length; i++) {
+    var newstate = simulate(actions[i], state, library);
+    var newvector = maximax(newstate); 
+    if (Number(newvector[active]) < Number(vector[active])) { continue; }
+    if (Number(newvector[active]) > Number(vector[active])) { vector = newvector; }
+    for (var j = 0; j < roles.length; j++) {
+      if (roles[j] !== active) {
+        vector[roles[j]] = Math.min(vector[roles[j]], newvector[roles[j]]);
+      }
+    }
+    
+    //early termination for first move only
+    if (isFirstMove && vector[role] == 100) {
+      console.log("returning early")
+      return vector;
+    }
+  }
+  return vector;
+}
+
+
+function bestmove(curState) {
+  console.log("Getting best move");
+  var actions = findlegals(curState, library);
+  if (actions.length === 0) { return null; }
+
+  if (isFirstMove) {
+    console.log("First move, decreasing action space");
+    actions = actions.slice(0, 5);
+  }
+
+  var bestAction = actions[0];
+  var bestScore = -1;
+
+  for (var i = 0; i < actions.length; i++) {
+    var newstate = simulate(actions[i], curState, library);
+    var vector = maximax(newstate);
+    var myScore = Number(vector[role]);
+
+    if (myScore > bestScore) {
+      bestScore = myScore;
+      bestAction = actions[i];
+    }
+    if(bestScore == 100){
+        console.log("found best score");
+        console.log("Best action:", bestAction);
+        return bestAction;
+    }
+  }
+
+  console.log("Best action:", bestAction);
+
+  return bestAction;
+}
+
+
+
+function ping ()
+ {return 'ready'}
+
+function start (r,rs,sc,pc)
+ {role = r;
+  rules = rs.slice(1);
+  startclock = numberize(sc);
+  playclock = numberize(pc);
+  library = definemorerules([],rules);
+  roles = findroles(library);
+  state = findinits(library);
+  console.log("Starting Game!");
+  return 'ready'}
+
+function play (move)
+ {
+ console.log(move)
+ if (move!==nil) {
+    state = simulate(move,state,library);
+    isFirstMove = false;
+    };
+ if (findcontrol(state,library)!==role) {return false};
+ return bestmove(state)}
+
+function stop (move)
+ {return false}
+
+function abort ()
+ {return false}
+
+//==============================================================================
+// End of player code
+//==============================================================================
+  </script>
+</head>
+
+<!--=======================================================================-->
+
+<body bgcolor='#aabbbb' onload='doinitialize()'>
+  <center>
+    <table width='720' cellspacing='0' cellpadding='40' bgcolor='#ffffff'>
+      <tr>
+        <td>
+
+<!--=======================================================================-->
+
+<center>
+  <table width='640' cellpadding='0'>
+    <tr>
+      <td width='180' align='center' valign='center'>
+        <img width='130' src='http://gamemaster.stanford.edu/images/ggp.jpg'/>
+      </td>
+      <td align='center'>
+        <span style='font-size:18pt'>&nbsp;</span>
+        <span style='font-size:32pt'>Gamemaster</span><br/>
+      </td>
+      <td width='180' align='center' style='color:#000066;font-size:18px'>
+        <i>General<br/>Game<br/>Playing</i>
+      </td>
+    </tr>
+  </table>
+</center>
+
+<!--=======================================================================-->
+
+<br/>
+<table width='640' cellpadding='8' cellspacing='0' bgcolor='#f4f8f8' border='1'>
+  <tr height='40'>
+     <td align='center'>
+<table style='color:#000066;font-size:18px'>
+  <tr>
+    <td>
+Protocol: localstorage<br/>
+Metagamer: none<br/>
+Strategy: custom<br/>
+Identifier: <span id='player'>aero</span> <img src="http://gamemaster.stanford.edu/images/pencil.gif" onclick='doplayer()'/>
+    </td>
+  </tr>
+</table>
+    </td>
+  </tr>
+</table>
+<br/>
+
+<!--=======================================================================-->
+
+<center>
+  <br/>
+  <textarea id='transcript' style='font-family:courier' rows='30' cols='80' readonly></textarea>
+</center>
+
+<!--=======================================================================-->
+
+        </td>
+      </tr>
+    </table>
+  </center>
+</body>
+
+<!--=======================================================================-->
+
+</html>
