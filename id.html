@@ -83,11 +83,6 @@ function playminimaxdepth (role)
 
 //==============================================================================
 
-
-
-
-/*  ITERATIVE DEEPENING WITH PENALTY FOR REDOING THE SAME ACTIONS AND EARLY CALLBACK WHEN FULL TREE IS DISCOVERED
-
 var nodes = 0;
 var terminals = 0;
 var elapsed = 0;
@@ -133,11 +128,11 @@ function playIterativeDeepening(role) {
         timeOut = true;
         break;
       }
-      // can we assume min-max scores are 0-100??
-      //if (score === 100) {
-      //  return actions[i];
-      //}
-      
+      /* can we assume min-max scores are 0-100??
+      if (score === 100) {
+        return actions[i];
+      }
+      */
 
       if (score > bestScore) {
         var newStateSignature = JSON.stringify(actions[i]);
@@ -196,11 +191,11 @@ function maximizedepth(active, role, state, depth, deadline) {
     if (newscore === false) {
       return false;
     }
-    // can we assume min-max scores are 0-100??
-    //if (newscore === 100) {
-    //  return 100;
-    //}
-    
+    /* can we assume min-max scores are 0-100??
+    if (newscore === 100) {
+      return 100;
+    }
+    */
     if (newscore > score) {
       score = newscore;
     }
@@ -224,11 +219,11 @@ function minimizedepth(active, role, state, depth, deadline) {
     if (newscore === false) {
       return false;
     }
-    // can we assume min-max scores are 0-100??
-    //if (newscore === 0) {
-    //  return 0;
-    //}
-    
+    /* can we assume min-max scores are 0-100??
+    if (newscore === 0) {
+      return 0;
+    }
+    */
     if (newscore < score) {
       score = newscore;
     }
@@ -237,199 +232,16 @@ function minimizedepth(active, role, state, depth, deadline) {
 }
 
 
-function play(move) {
-  if (move !== nil) {
-      var stateSignature = JSON.stringify(move);
-      visitedStates[stateSignature] = role;
-      compexecute(move, state, library)
 
-  };
+function betterp (x,y)
+  {if (x[0]>y[0]) {return true};
+  if (x[0]===y[0]) {return (x[1]>y[1])};
+  return false}
 
-  if (findcontrol(state, library) !== role) {
-      return false
-  };
-
-  return playIterativeDeepening(role)
-}
-
-*/
-
-
-var tree;
-var mobilityCoef = 0.5;
-
-//Persistant Tree
-function play(move) {
-  if (move !== nil) {
-    tree = subtree(move, tree); 
-    state = tree.state
-  }
-  else{
-    tree = makenode(state,findcontrol(state,library),evaluate(role, state));
-  };
-  if (findcontrol(state, library) !== role) {
-    return false
-  };
-  var deadline = Date.now() + (playclock - 2) * 1000;
-  while (Date.now() < deadline) {
-    process(tree)
-  };
-  return selectaction(tree);
-}
-
-
-function mobility (r, state, library) {
-  var actions = findlegals(state,library);
-  var feasibles = findactions(library);
-
-  if (r === role) {
-    return (actions.length/feasibles.length) * 100
-  } else {
-    return 100 - (actions.length/feasibles.length) * 100
-  }
-}
-
-
-function intermediate_reward (role, state) {
-    return findreward(role, state, library) * 1;
-}
-
-function evaluate(role, state) {
-  return mobilityCoef * mobility(role, state, library) + (1 - mobilityCoef) * intermediate_reward(role, state);
-}
-
-function selectaction(node) {
-  var action = node.actions[0];
-  var score = node.children[0].utility;
-  for (var i = 1; i < node.children.length; i++) {
-    var newscore = node.children[i].utility;
-    if (newscore > score) {
-      action = node.actions[i];
-      score = newscore
-    }
-  };
-  return action;
-}
-
-function selectnode(node) {
-  var child = node.children[0];
-  var visits = node.children[0].visits;
-  for (var i = 1; i < node.children.length; i++) {
-    var newvisits = node.children[i].visits;
-    if (newvisits < visits) {
-      child = node.children[i];
-      visits = newvisits
-    }
-  };
-  return child;
-}
-
-function subtree(move, node) {
-  if (node.children.length === 0) {
-    expand(node)
-  };
-  for (var i = 0; i < node.actions.length; i++) {
-    if (equalp(move, node.actions[i])) {
-      return node.children[i]
-    }
-  }
-  return node;
-}
-
-function select(node) {
-  var total = node.visits;
-  var child = node.children[0];
-  var score = value(child.utility, child.visits, total);
-  for (var i = 1; i < node.children.length; i++) {
-    var newchild = node.children[i];
-    var newvalue = newchild.utility;
-    var newvisits = newchild.visits;
-    var newscore = value(newvalue, newvisits, total);
-    if (newscore > score) {
-      child = newchild;
-      score = newscore
-    }
-  };
-  return child;
-}
-
-function makenode(state, mover, reward) {
-  return {
-    state: state,
-    actions: [],
-    children: [],
-    mover: mover,
-    utility: reward,
-    visits: 0
-  }
-}
-
-function process(node) {
-  if (node.children.length === 0) {
-    expand(node);
-    return update(node);
-  }
-  else {
-    var child = select(node);
-    var result = process(child);
-    return update(node);
-  }
-}
-
-function expand(node) {
-  var state = node.state;
-  var mover = node.mover;
-  var actions = findlegals(state, library);
-  actions = shuffle(actions);
-  
-  for (var i = 0; i < actions.length; i++) {
-    var newstate = simulate(actions[i],state,library)
-    node.actions.push(actions[i]);
-    node.children.push(makenode(newstate, findcontrol(newstate, library), evaluate(role, newstate)));
-  }
-  
-  return true;
-}
-
-function scoremax(node) {
-  var score = node.children[0].utility;
-  for (var i = 1; i < node.children.length; i++) {
-    var newscore = node.children[i].utility;
-    if (newscore > score) {
-      score = newscore;
-    }
-  }
-  return score;
-}
-
-function scoremin(node) {
-  var score = node.children[0].utility;
-  for (var i = 1; i < node.children.length; i++) {
-    var newscore = node.children[i].utility;
-    if (newscore < score) {
-      score = newscore;
-    }
-  }
-  return score;
-}
-
-function update(node) {
-  if (node.mover === role) {
-    node.utility = scoremax(node)
-  } else {
-    node.utility = scoremin(node)
-  };
-  node.visits = node.visits + 1;
-  return true;
-}
-
-
-
-function value(utility, visits, total) {
-  var score = (utility + Math.round((1 - visits / total) * 100));
-  return score;
-}
-
+function worsep (x,y)
+  {if (x[0]<y[0]) {return true};
+  if (x[0]===y[0]) {return (x[1]<y[1])};
+  return false}
 
 function shuffle (array)
   {for (var i = array.length-1; i>0; i--)
@@ -456,7 +268,20 @@ function start(r, rs, sc, pc) {
     return 'ready'
 }
 
+function play(move) {
+  if (move !== nil) {
+      var stateSignature = JSON.stringify(move);
+      visitedStates[stateSignature] = role;
+      compexecute(move, state, library)
 
+  };
+
+  if (findcontrol(state, library) !== role) {
+      return false
+  };
+
+  return playIterativeDeepening(role)
+}
 
 function stop(move) {
     return false
