@@ -27,6 +27,41 @@ var state = [];
 /*
 Writeup:
 
+1. The pessimistic evaluation function is very simple, returning the reward for
+terminal states and 0 for all non-terminal states.
+
+2. Our mobility function returns a score from 0 to 100 based on the percentage
+of moves that are feasible in the current game state. If this player is the
+active player, the score assigned is equal to this percentage; otherwise, the
+score is equal to 100 minus this percentage.
+
+3. The intermediate reward function simply returns the reward value at the 
+current state, regardless of if the current state is terminal.
+
+4. The bounded depth minimax player we created explores the game tree to depth 3.
+Terminal states are given their true score; if a terminal state is not reached
+and we are at max depth, the state is evaluated as follows:
+
+function evaluate(role, state) {
+  return mobilityCoef * mobility(role, state, library) + (1 - mobilityCoef) * intermediate_reward(role, state);
+}
+
+Currently, we have mobilityCoef set to 0.5.
+
+5. The iterative deepening player we built uses bounded depth, increasing the
+depth until a time deadline is reached. Once the deadline is passed, the player
+returns the current score value. We have also implemented a penalty for redoing
+the same actions and an early callback when the entire game tree is discovered
+into our iterative deepening player.
+
+6. The persistent tree search player explores branches based on which available
+node has the highest evaluation function value, using the same evaluation function
+as our bounded depth and iterative deepening players. This evaluation function
+takes into account both mobility and the intermediate reward value, therefore
+providing a balance between exploitation and exploration in choosing the next
+branch to explore.
+
+
 /* PESSIMISTIC EVAL
 function pessimistic_eval (role, state) {
     var state_value = 0;
