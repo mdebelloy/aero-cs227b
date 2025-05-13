@@ -14,83 +14,6 @@
 
       /* WRITEUP:
 
-      We implemented MCTS with UCB, indexing and differential update as seen in class. An explanation of each function is given below. While most
-      of this code is just from lecture, we note that we still use an evaluation function that is a linear combination of mobility and intermediate
-      reward. After manually playing around with these, we decided to set the mobility coefficient to 0.2, making the linear combination 80% 
-      intermediate reward. Similarly, we set the C coefficient in the UCB function to 1.0. We note that the original paper uses sqrt(2) or 
-      approximately 1.4, which is provides optimal regret bounds for multi armed bandit problems, but we chose a slightly more conservative value.
-      The description of each function is below, and the indexing and differential update parts are taken straigth from the lecture slides.
-
-      CODE SPECIFICATIONS
-
-      Helper functions:
-      -----------------
-      - For the detailed descriptions of the following helper functions, 
-        please refer to the comments provided for the functions below. 
-
-      1. shuffle(arr): Shuffles an array in place. 
-      2. numberize(str): Turn an input string to an integer. 
-      3. mobility(r, role, library): Computes the percentage of available moves among all moves. 
-      4. intermediate_reward(role, state): Compute the reward of a given state. 
-      5. evaluate(role, state): Computes the weighted valuation for a state and given role,  
-          as a weighted sum of long-term mobility vs. immediate rewards. 
-      6. makenode(state, mover, reward): Initializes a new node for the MCTS tree. 
-
-
-      Primary functions: 
-      ------------------ 
-      1. play(move): 
-        - Runs a single move in the MCTS loop. 
-        - If move is given, updates the current tree. 
-        - Otherwise, initializes a new tree. 
-        - Limits the search based on time limits of the player.
-        - Logs best found move every 1000 iterations (chosen as the default value). 
-        - Selects and returns the move with best average reward. 
-
-      2. getBestAction(node): 
-        - Selects the child with highest utility. 
-        - Runs a greedy search among the children of the current node, using MCTS. 
-      
-      3. process(node, deadline):
-        - Runs the recursive calls to the MCTS, covering simulation, tree expansion and
-          backpropagation. 
-        - If the search arrives at a terminal state, returns the final reward. 
-        - For all unexpanded nodes, generates all legal successor states for exploration. 
-          - Loops through the children nodes, simulates MCTS for all non-terminal children, 
-            assigns the results as utilities to each node. 
-          - Backpropagates the assigned utility values from child nodes to the current nodes 
-            to determine the best action. 
-        - For all expanded nodes, recurse onto the best child and backpropagate the utility values. 
-
-      4. expand(node):
-        - Adds all legal children nodes to queue for exploration. 
-        - Randomly shuffles legal actions. 
-        - For all terminal states, uses evaluate(role, state) function to compute the
-          weighted expected average reward of the given state. 
-      
-      5. select(node):
-        - Selects the child node with the highest UCB value. 
-        - The function defined for the UCB value is implemented from the same formula 
-          provided in the lecture slides. 
-      
-      6. ucbValue(node, parentVisits): 
-        - Computes the UCB formula (implemented from the lecture slides). 
-        - Designed to balance long vs. short term rewards. 
-        - The hyperparameter C = 1.0 is chosen as the default, but not tested experimentally
-          to converge into the optimal value. 
-          - Testing and optimizing the value for C remains as an open improvement area.
-
-      7. update(node): 
-        - Updates utility values for children.
-        - Uses scoremax() for the player, and scoremin() for the opponent. 
-          under the objective of maximizing the player's actions and expecting the worst
-          possible outcome from the opponent. 
-
-      8. depthcharge(state):
-        - Simulates a randomized game from a given state.
-        - Recursively plays randomized actions until reaching the terminal state, and 
-          returns final rewards. 
-        - Performs an unbounded depth search, capped by the time limitations of the player. 
       */
 
       var manager = 'manager';
@@ -497,6 +420,7 @@
         return "ready";
       }
 
+      // Headstart start function
       function start(r, rs, sc, pc) {
         role = r;
         rules = rs.slice(1);
@@ -508,6 +432,9 @@
         depthcharges = 0;
         
         tree = makenode(state, findcontrol(state, library), evaluate(role, state));
+
+        var deadline = Date.now()+startclock*1000;
+        while (Date.now()<deadline) {process(tree, deadline)};
         
         return "ready";
       }
