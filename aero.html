@@ -14,6 +14,16 @@
 
       /* WRITEUP:
 
+      1. Our Headstart implementation works by calling the play function within the
+      start function. If our play function is called before the play time begins,
+      it searches the tree until shortly before the start timer ends and does not
+      return a value. We have a global variable called isInPlay to track whether
+      the play timer has started; this variable is defined as false, but when the
+      play function is called the first time (i.e. in the start function), it is 
+      set to true.
+
+      2. (still need to write)
+
       */
 
 var manager = 'manager';
