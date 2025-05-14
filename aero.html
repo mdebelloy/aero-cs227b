@@ -24,6 +24,30 @@
 
       2. (still need to write)
 
+      We expect the player to perform well on the following kinds of games: 
+	    ⁃	Because we conduct a tree search at the beginning of the game, we expect
+         our player to perform well on smaller games whose full game tree could be 
+         traced through before the game starts. In these cases, the player would 
+         be able to find the best possible sequence of actions and execute them in order. 
+	    ⁃	We take a pessimistic approach to our player and assume that the opponent 
+         will be making the worst possible choice for us in each match cycle. In the cases
+         where this holds, we expect our predictions for the future outcomes to be accurate 
+         and perform well as a consequence.
+
+      We expect the player to perform poorly on the following kinds of games: 
+	    ⁃	Our player strictly assumes that the opponent uses a minimax strategy throughout 
+         the game, which is not subject to change. For any opponents where this is incorrect,
+         or the game itself has some incomplete information component that prevents both players
+         from assessing the game states fully, we expect the player to perform poorly. 
+	    ⁃	Given our player does not update its strategy based on the opponent’s strategy, 
+         there would be a winning strategy for the opponent on all small games where the entire
+         game tree might be searched within the given time limitations, assuming that the opponent
+         can detect that our strategy is not dynamically determined. 
+	  	⁃	For games whose full trees are too large to conduct iterative deepening, we also expect 
+          to perform poorly, since our player does not implement an optimization to avoid repeating 
+          the computations/does not have a pipeline it uses to keep track of the game tree searched
+          thus far. 
+
       */
 
 var manager = 'manager';
