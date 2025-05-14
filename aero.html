@@ -11,44 +11,55 @@
       //==============================================================================
 
 
+    /* WRITEUP:
 
-      /* WRITEUP:
 
-      1. Our Headstart implementation works by calling the play function within the
-      start function. If our play function is called before the play time begins,
-      it searches the tree until shortly before the start timer ends and does not
-      return a value. We have a global variable called isInPlay to track whether
-      the play timer has started; this variable is defined as false, but when the
-      play function is called the first time (i.e. in the start function), it is 
-      set to true.
+    We start by noting that we fixed a few issues from last week's implementation of MCTS with 
+    indexing and differential updates. Namely, we realized that we weren't properly differentiating
+    between an immediate loss score of 0 and an estimated score of 0. The former is an end case that 
+    we have to avoid if we don't want to immediately. lose. We fix this by adding a function that 
+    checks for one turn losses and steers away from moves that would result in one or two turn losses.
 
-      2. (still need to write)
+    1. We started with the Bigswitch strategy. During the state phase, before Headstart, we sample a 
+    random action to check if the game we are in is a single or multi player game. If we're in a 
+    single player game, we change certain hyperparameters, like removing mobility as a factor from 
+    the evaluation function (mobilityCoef = 0.0) since there is no other player to corner us.
+    We also double the UCB C constant to 2.0 to further promote exploration, since there is no 
+    opponent to capitalize on a "wrong" move. We also looked at using iterative deepening
+    for single player games, and found that, especially on Hunter, the tree search performed
+    better than iterative deepening given the time constraints, so our final solution keeps MCTS for
+    both game types.
 
-      We expect the player to perform well on the following kinds of games: 
-	    ⁃	Because we conduct a tree search at the beginning of the game, we expect
-         our player to perform well on smaller games whose full game tree could be 
-         traced through before the game starts. In these cases, the player would 
-         be able to find the best possible sequence of actions and execute them in order. 
-	    ⁃	We take a pessimistic approach to our player and assume that the opponent 
-         will be making the worst possible choice for us in each match cycle. In the cases
-         where this holds, we expect our predictions for the future outcomes to be accurate 
-         and perform well as a consequence.
+    2. We then implemented a Headstart strategy. This works by calling the play function within the 
+    start function during the game setup time, as described in lecture. The player starts building out
+    the MCTS tree by repeatedly calling depth charge, which gives us more time to explore the game
+    tree before having to submit a first move, increasing the player's accuracy in state estimations.
 
-      We expect the player to perform poorly on the following kinds of games: 
-	    ⁃	Our player strictly assumes that the opponent uses a minimax strategy throughout 
-         the game, which is not subject to change. For any opponents where this is incorrect,
-         or the game itself has some incomplete information component that prevents both players
-         from assessing the game states fully, we expect the player to perform poorly. 
-	    ⁃	Given our player does not update its strategy based on the opponent’s strategy, 
-         there would be a winning strategy for the opponent on all small games where the entire
-         game tree might be searched within the given time limitations, assuming that the opponent
-         can detect that our strategy is not dynamically determined. 
-	  	⁃	For games whose full trees are too large to conduct iterative deepening, we also expect 
-          to perform poorly, since our player does not implement an optimization to avoid repeating 
-          the computations/does not have a pipeline it uses to keep track of the game tree searched
-          thus far. 
+    Following the teaching team's comments about last week's write up, we also include a quick analysis
+    about how we expect our player to perform in different scenarios:
 
-      */
+    We expect the player to perform well on the following kinds of games: 
+      ⁃	Because of the added Headstart and Bigswitch strategies, we expect our player to perform well 
+      on larger games where we are playing against other MCTS player without these improvements, since
+      we will be able to perform more depthcharges through the tree.
+      ⁃	We take a pessimistic approach to our player and assume that the opponent will be making the worst
+      possible choice for us in each match cycle. In the cases where this holds, we expect our predictions 
+      for the future outcomes to be accurate and perform well as a consequence.
+
+    We expect the player to perform poorly on the following kinds of games: 
+      ⁃	Our player strictly assumes that the opponent uses a minimax strategy throughout the game, which is
+      not subject to change. For any opponents where this is incorrect, or the game itself has some incomplete 
+      information component that prevents both players from assessing the game states fully, we expect the 
+      player to perform sub-optimaly. This is a point we would like to focus on for future weeks. 
+      ⁃	Given our player does not update its strategy based on the opponent’s strategy, any repeated play against
+      an opponent that learns how we play and adapts accordingly would also have an edge on our player
+      - Finally, in games with very wide, but reletively shallow game trees, with very few winning moves,
+       it is possible for the MCTS to overlook these rare wins by simply not depthcharging down the correct paths. 
+       In these cases, a strategy like iterative deepening coule be more appropriate.
+
+
+    */
+
 
 var manager = 'manager';
 var player = 'aero';
