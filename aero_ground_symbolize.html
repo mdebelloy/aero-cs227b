@@ -165,7 +165,7 @@ function play(move) {
 
   var deadline;
   if(isInPlay == false){
-    deadline = Date.now() + (startclock -1) * 1000;
+    deadline = Date.now() + Math.max(1, startclock-2) * 1000
     detectGameType();
   }
   else{
@@ -548,7 +548,7 @@ function start(r, rs, sc, pc) {
 
   
   rules    = definemorerules([], rules);            
-  const gDeadline = Date.now() + (startclock - 2) * 1000;
+  const gDeadline = Date.now() + Math.max(1, startclock-2) * 1000;
   const grounded  = groundrulesWithDeadline(rules, gDeadline);   // <<< NEW
   rules    = grounded ?? rules;                     // use grounded only if on time
   rules    = symbolizerules(rules);                 // shrink state to integers
