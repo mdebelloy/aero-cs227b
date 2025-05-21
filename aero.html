@@ -5,6 +5,7 @@
     <script type='text/javascript' src='../javascript/localstorage.js'></script>
     <script type='text/javascript' src='../metagaming/grounder.js'></script>
     <script type='text/javascript' src='../metagaming/symbolizer.js'></script>
+    <script type='text/javascript' src='../reasoning/symbol.js'></script>
     <script type='text/javascript' src='../gameplaying/pts.js'></script>
     <script type='text/javascript' src='../reasoning/ground.js'></script>
     <script type='text/javascript'>
@@ -115,7 +116,7 @@
         // Try to ground the rules
         console.log("Attempting to ground rules...");
         const groundDeadline = Date.now() + (startclock * 500); // Use half the start clock
-        const groundedRules = groundrules(rules, groundDeadline);
+        const groundedRules = groundrulesWithDeadline(rules, groundDeadline);
         
         if (groundedRules) {
           console.log("Grounding successful: " + groundedRules.length + " ground rules");
@@ -128,12 +129,12 @@
             useSymbol = true;
             
             // Override interpreter functions with symbol.js versions
-            window.findinits = symbfindinits;
-            window.findlegals = symbfindlegals;
-            window.simulate = symbsimulate;
-            window.findcontrol = symbfindcontrol;
-            window.findterminalp = symbfindterminalp;
-            window.findreward = symbfindreward;
+            window.findinits = findinnits;
+            window.findlegals = findlegas;
+            window.simulate = simulate;
+            window.findcontrol = findcontrol;
+            window.findterminalp = findterminalp;
+            window.findreward = findreward;
             
             console.log("Using symbol interpreter");
           } catch (error) {
@@ -485,6 +486,29 @@
       /* numberize(str): Converts a string to a number. */
       function numberize(str) {
         return parseInt(str);
+      }
+
+      function groundrulesWithDeadline(rawRules, deadline) {
+        // --- quick exit for tiny games -------------------------------------------
+        if (rawRules.length < 200) return groundrules(rawRules);
+        // --- local working copies -------------------------------------------------
+        const grounded = [];
+        let agenda = rawRules.slice();           // rules still to ground
+        // --- helper to ground one rule -------------------------------------------
+        function groundOne(rule) {
+          // (reuse the library's own helper)
+          grounded.push.apply(grounded, groundrule(rule));
+        }
+        // --- main loop ------------------------------------------------------------
+        while (agenda.length) {
+          if (Date.now() >= deadline) {
+            console.warn("[grounder] Deadline hit → abort grounding, use raw rules");
+            return null;                            // signal timeout
+          }
+          const r = agenda.pop();
+          groundOne(r);
+        }
+        return grounded;
       }
 
       // Support functions
