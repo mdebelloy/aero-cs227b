@@ -4,6 +4,7 @@
     <script type='text/javascript' src='/epilog/javascript/epilog.js'></script>
     <script type='text/javascript' src='../javascript/localstorage.js'></script>
     <script type='text/javascript' src='../metagaming/grounder.js'></script>
+    <script type='text/javascript' src='../metagaming/symbolizer.js'></script>
     <script type='text/javascript' src='../gameplaying/pts.js'></script>
     <script type='text/javascript' src='../reasoning/ground.js'></script>
     <script type='text/javascript'>
@@ -12,530 +13,484 @@
       // aero.js
       //==============================================================================
 
+      /*
+        This week, following the assignment, we keep our MCTS player, but run it on grounded and symbolized
+        rules. We tested the three players (last week's with no grounding, grounding with the general interpreter,
+        and symbolizing) on Hunter, Connect 4 and Tic Tac Toe. For Hunter, the Grounded Interpreter performs better
+        than the General Interpreter on ground rules, and both are beatan by the No Grounding player achieves the most
+        depth charges (as seen in the table below). This is likely due to the fact that Hunter has a somewhwat simple rule 
+        structure where grounding introduces overhead without significant benefits. For Connect 4, the General Interpreter
+        had more depth charges during the headstart period than the No Grounding player. Finally, in Tic-tac-toe,
+        both the General Interpreter and Grounded Interpreter significantly outperformed the No Grounding player,
+        with the Grounded Interpreter getting the largest number of depth charges. 
 
-    /* WRITEUP:
+        | Game        | Player Type           | Depth Charges (Headstart)   | Nodes Explored (Headstart)  | Depth Charges (Move 1) | Nodes Explored (Move 1) |
+        |-------------|------------------------|----------------------------|-----------------------------|------------------------|-------------------------|
+        | Hunter      | No Grounding           | 124,460                    | 17,800                      | 266,318                | 38,545                  |
+        | Hunter      | General Interpreter    | 71,091                     | 9,310                       | 93,932                 | 15,447                  |
+        | Hunter      | Grounded Interpreter   | 93,888                     | 12,831                      | 92,698                 | 15,736                  |
+        | Connect4    | No Grounding           | 22,668                     | 1,162                       | 51,690                 | 2,651                   |
+        | Connect4    | General Interpreter    | 39,412                     | 2,057                       | 47,393                 | 2,608                   |
+        | Connect4    | Grounded Interpreter   | 30,531                     | 1,569                       | 33,736                 | 1,776                   |
+        | Tic-tac-toe | No Grounding           | 139,114                    | 48,307                      | 300,442                | 105,705                 |
+        | Tic-tac-toe | General Interpreter    | 226,346                    | 91,035                      | 181,180                | 108,558                 |
+        | Tic-tac-toe | Grounded Interpreter   | 261,114                    | 110,234                     | 211,459                | 135,014                 |
 
-    */
+
+        We clearly see that grounding and symbolizing is not always worthwile. We also note some differences between our 
+        results and those from the slides' grounding experiments. This may imply that our implementation is somewhat
+        flawed, and still needs some work. The implementation is mostly the same as last week's: We are running
+        MCTS using Upper Confidence Bounds with both a headstart and bigswitch strategy. However, during the start 
+        period, we are attempting to ground and symbolize the rules. If this fails or times out, we fall back to the 
+        general interpreter.
 
 
-var manager = 'manager';
-var player = 'aero';
+      */
 
-var role = 'robot';
-var rules = [];
-var startclock = 10;
-var playclock = 10;
 
-var library = [];
-var roles = [];
-var state = [];
+      var manager = 'manager';
+      var player = 'aero';
 
-var tree;
-var C = 1.0; 
-var mobilityCoef = 0.2; 
-var dataindexing = false; 
-var depthcharges = 0; 
-var isInPlay = false;
-var isMultiPlayer = true;
+      var role = 'robot';
+      var rules = [];
+      var startclock = 10;
+      var playclock = 10;
 
-/* shuffle(arr): 
-Description: 
-- Shuffles an input array in place.
-Input: 
-- array: The input array to be shuffled.
-Returns:
-- array: The shuffled array. 
-*/ 
-function shuffle(array) {
-  for (var i = array.length - 1; i > 0; i--) {
-    var j = Math.floor(Math.random() * (i + 1));
-    var temp = array[i];
-    array[i] = array[j];
-    array[j] = temp;
-  }
-  return array;
-}
+      var library = [];
+      var roles = [];
+      var state = [];
 
-/* numberize(str):
-Description:
-- Takes in an input string, and returns the integer associated
-  with the numerical value of the string. 
-Input:
-- str: The input string, in numerals. 
-Returns:
-- parseInt(str): The numerical value of the input string.
-*/
-function numberize(str) {
-  return parseInt(str);
-}
+      var tree;
+      var C = 1.0; 
+      var depthCharges = 0;
+      var nodesExplored = 0;
+      var metrics = false;
+      var logging = false;
+      var useSymbol = false;  
 
-/* mobility(r, state, library):
-Description:
-  - Determines the mobility of a given player in a state, 
-    as a function of the percentage of the available moves to the player.
-Input: 
-  - r: Assigned role of the player. 
-  - state: The current state.
-  - library: The library consisting of the state graph. 
-Returns:
-  - If it is the player's turn, return the percentage of legal moves for the player. 
-  - Otherwise (opponent's turn), return the percentage of legal moves for the player. 
-*/
-function mobility(r, state, library) {
-  var actions = findlegals(state, library);
-  var feasibles = findactions(library);
+      // Store original functions to restore them if needed
+      var originalFindinits = findinits;
+      var originalFindlegals = findlegals;
+      var originalSimulate = simulate;
+      var originalFindcontrol = findcontrol;
+      var originalFindterminalp = findterminalp;
+      var originalFindreward = findreward;
 
-  if (r === role) {
-    return (actions.length/feasibles.length) * 100;
-  } else {
-    return 100 - (actions.length/feasibles.length) * 100;
-  }
-}
-
-/* intermediate_reward(role, state):
-Description: 
-  - Computes the reward of a given state, for a given player.
-Input: 
-  - role: Role of the current player.
-  - state: Current state. 
-Returns:
-  - The reward of the current state. 
-*/
-function intermediate_reward(role, state) {
-  return findreward(role, state, library) * 1;
-}
-
-/* evaluate(role, state): 
-Description:
-  - Weights the long-term mobility with immediate short-term gains.
-  - Designed to balance the long-term vs. short-term rewards of a given decision. 
-Input: 
-  - role: Role of the current player. 
-  - state: Current state.
-Returns:
-  - The weighted valuation of the current state.
-*/
-function evaluate(role, state) {
-  return mobilityCoef * mobility(role, state, library) + (1 - mobilityCoef) * intermediate_reward(role, state);
-}
-
-function detectGameType() {
-  var actions = findlegals(state, library);
-  if (actions.length === 0) return;
-  
-  var testState = simulate(actions[0], state, library);
-  var opponents = roles.filter(r => r !== role);
-  
-  if (opponents.length === 0 || (opponents.length === 1 && findcontrol(testState, library) === role)) {
-    isMultiPlayer = false;
-    C = 2.0;
-    mobilityCoef = 0;
-    console.log("Single-player game detected. Adjusted strategy: C=" + C + ", mobilityCoef=" + mobilityCoef);
-  } else {
-    isMultiPlayer = true;
-    console.log("Multi-player game detected. Using default parameters.");
-  }
-}
-
-/* play(move):
-Description:
-  - Perform one MCTS play cycle based on the given move. 
-  - Continue running MCTS cycles until the time runs out. 
-  - Log results every 1000 iterations (chosen by default). 
-  - Find the move with best average reward. 
-Input: 
-  - move: An action for which an MCTS play cycle is to be performed. 
-Returns:
-  - false: If it is not the player's turn.
-  - bestMove.action: Otherwise, action with the best average reward.  
-*/
-function play(move) {
-
-  if (move !== nil) {
-    tree = subtree(move, tree);
-    state = tree.state;
-  } else {
-    tree = makenode(state, findcontrol(state, library), evaluate(role, state));
-  }
-  
-  if (findcontrol(state, library) !== role) {
-    return false;
-  }
-
-  var deadline;
-  if(isInPlay == false){
-    deadline = Date.now() + (startclock -1) * 1000;
-    detectGameType();
-  }
-  else{
-    deadline = Date.now() + (playclock - 2) * 1000;
-  }
-  var iterations = 0;
-  
-  while (Date.now() < deadline) {
-    process(tree, deadline);
-    iterations++;
-    
-    if (iterations % 1000 === 0) {
-      var timeRemaining = Math.max(0, (deadline - Date.now()) / 1000);
-      console.log("Time remaining: " + timeRemaining.toFixed(1) + "s, iterations: " + iterations);
-      
-      var bestAction = getBestAction(tree);
-      console.log("Current best action: " + bestAction.action + 
-                  ", visits: " + bestAction.visits + 
-                  ", score: " + bestAction.score);
-    }
-  }
-  if(isInPlay == false){
-    isInPlay = true;
-    return;
-  }
-  
-  var bestMove = getActionAvoidingLoss(tree);
-  console.log("Final decision:");
-  console.log("- Action: " + bestMove.action);
-  console.log("- Score: " + bestMove.score);
-  console.log("- Visits: " + bestMove.visits);
-  
-  var newState = simulate(bestMove.action, tree.state, library);
-  var terminal = findterminalp(newState, library);
-  if (terminal) {
-    var actualReward = findreward(role, newState, library) * 1;
-    console.log("- Terminal state: YES");
-    console.log("- Actual terminal reward: " + actualReward);
-  } else {
-    console.log("- Terminal state: NO");
-  }
-  
-  return bestMove.action;
-}
-
-function getActionAvoidingLoss(node) {
-  if (!node.children || node.children.length === 0) {
-    return { action: findlegalx(node.state, library), score: 0, visits: 0 };
-  }
-  
-  var safeMoves = [];
-  
-  for (var i = 0; i < node.children.length; i++) {
-    var child = node.children[i];
-    
-    if (child.isTerminal && child.utility === 0) {
-      console.log("Avoiding immediate loss: " + node.actions[i]);
-      continue;
-    }
-    
-    if (!child.isTerminal && child.mover !== role) {
-      var hasOpponentWin = false;
-      
-      if (child.children && child.children.length > 0) {
-        for (var j = 0; j < child.children.length; j++) {
-          if (child.children[j].isTerminal && child.children[j].utility === 0) {
-            hasOpponentWin = true;
-            console.log("Avoiding 1-turn loss: " + node.actions[i]);
-            break;
-          }
+      /* shuffle(arr): Shuffles an input array in place. */
+      function shuffle(array) {
+        for (var i = array.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var temp = array[i];
+          array[i] = array[j];
+          array[j] = temp;
         }
-      } else {
-        var opponentActions = findlegals(child.state, library);
-        for (var j = 0; j < opponentActions.length; j++) {
-          var opponentState = simulate(opponentActions[j], child.state, library);
-          if (findterminalp(opponentState, library) && findreward(role, opponentState, library) === 0) {
-            hasOpponentWin = true;
-            console.log("Avoiding potential 1-turn loss: " + node.actions[i]);
-            break;
-          }
-        }
+        return array;
       }
-      
-      if (hasOpponentWin) continue;
-    }
-    
-    safeMoves.push({
-      index: i,
-      action: node.actions[i],
-      score: child.utility,
-      visits: child.visits
-    });
-  }
-  
-  if (safeMoves.length === 0) {
-    console.log("No safe moves found. Defaulting to best available move.");
-    return getBestAction(node);
-  }
-  
-  safeMoves.sort((a, b) => (b.score / Math.max(1, b.visits)) - (a.score / Math.max(1, a.visits)));
-  
-  return {
-    action: safeMoves[0].action,
-    score: safeMoves[0].score,
-    visits: safeMoves[0].visits
-  };
-}
 
-function getBestAction(node) {
-  if (!node.children || node.children.length === 0) {
-    return { action: findlegalx(node.state, library), score: 0, visits: 0 };
-  }
-  
-  var bestIndex = 0;
-  var bestScore = node.children[0].utility;
-  var bestVisits = node.children[0].visits;
-  
-  for (var i = 1; i < node.children.length; i++) {
-    var newscore = node.children[i].utility;
-    if (newscore > bestScore) {
-      bestIndex = i;
-      bestScore = newscore;
-      bestVisits = node.children[i].visits;
-    }
-  }
-  
-  return {
-    action: node.actions[bestIndex],
-    score: bestScore,
-    visits: bestVisits
-  };
-}
+      /* numberize(str): Converts a string to a number. */
+      function numberize(str) {
+        return parseInt(str);
+      }
 
-function makenode(state, mover, reward) {
-  return {
-    state: state,
-    actions: [],
-    children: [],
-    mover: mover,
-    utility: reward,
-    visits: 0,
-    isTerminal: findterminalp(state, library)
-  };
-}
+      /**
+       * Start function - initializes the player
+       */
+      function start(r, rs, sc, pc) {
+        role = r;
+        rules = rs.slice(1);
+        startclock = numberize(sc);
+        playclock = numberize(pc);
 
-function process(node, deadline) {
-  if (Date.now() >= deadline) return false;
-  
-  if (node.isTerminal) {
-    node.utility = findreward(role, node.state, library) * 1;
-    node.visits += 1;
-    return true;
-  }
-  
-  if (node.children.length === 0) {
-    expand(node);
-    
-    for (var i = 0; i < node.children.length && Date.now() < deadline; i++) {
-      if (node.children[i].isTerminal) {
-        node.children[i].utility = findreward(role, node.children[i].state, library) * 1;
-      } else {
-        dataindexing = true;
-        var copy = definemorefacts([], node.children[i].state);
-        var result = depthcharge(copy);
-        dataindexing = false;
+        // Reset metrics
+        if (metrics) {
+          depthCharges = 0;
+          nodesExplored = 0;
+        }
+
+        console.log("Starting with " + rules.length + " rules");
         
-        node.children[i].utility = result;
+        // First define the rules using the general approach
+        rules = definemorerules([], rules);
+        
+        // Try to ground the rules
+        console.log("Attempting to ground rules...");
+        const groundDeadline = Date.now() + (startclock * 500); // Use half the start clock
+        const groundedRules = groundrules(rules, groundDeadline);
+        
+        if (groundedRules) {
+          console.log("Grounding successful: " + groundedRules.length + " ground rules");
+          
+          // Try to symbolize the ground rules
+          try {
+            console.log("Attempting to symbolize ground rules...");
+            const symbolizedRules = symbolizerules(groundedRules);
+            rules = symbolizedRules;
+            useSymbol = true;
+            
+            // Override interpreter functions with symbol.js versions
+            window.findinits = symbfindinits;
+            window.findlegals = symbfindlegals;
+            window.simulate = symbsimulate;
+            window.findcontrol = symbfindcontrol;
+            window.findterminalp = symbfindterminalp;
+            window.findreward = symbfindreward;
+            
+            console.log("Using symbol interpreter");
+          } catch (error) {
+            console.warn("Symbolization failed: " + error);
+            // Fall back to original interpreter
+            useSymbol = false;
+            console.log("Using general interpreter");
+          }
+        } else {
+          console.log("Grounding failed or timed out, using original rules");
+          useSymbol = false;
+          console.log("Using general interpreter");
+        }
+        
+        // Build the final library
+        library = definemorerules([], rules);
+        roles = findroles(library);
+        state = findinits(library);
+        
+        // Create initial MCTS tree
+        tree = makenode(state, findcontrol(state, library), 0);
+        
+        // Use any remaining startclock time for initial MCTS search
+        const headstartDeadline = Date.now() + Math.max(1, startclock - 2) * 1000;
+        let iterations = 0;
+        
+        while (Date.now() < headstartDeadline) {
+          process(tree, headstartDeadline);
+          iterations++;
+          if(logging == true){
+            if (iterations % 1000 === 0) {
+              var timeRemaining = Math.max(0, (headstartDeadline - Date.now()) / 1000);
+              console.log("Headstart - Time remaining: " + timeRemaining.toFixed(1) + 
+                          "s, iterations: " + iterations);
+            }
+          }
+        }
+        
+        if (metrics) {
+          console.log("Headstart complete - " + iterations + " iterations, " + 
+                      depthCharges + " depth charges, " + nodesExplored + " nodes explored");
+        }
+        
+        return "ready";
       }
-      node.children[i].visits = 1;
-    }
-    
-    return update(node);
-  } else {
-    var child = select(node);
-    process(child, deadline);
-    return update(node);
-  }
-}
 
-function expand(node) {
-  var actions = findlegals(node.state, library);
-  actions = shuffle(actions);
-  
-  for (var i = 0; i < actions.length; i++) {
-    var newstate = simulate(actions[i], node.state, library);
-    var newcontrol = findcontrol(newstate, library);
-    var terminal = findterminalp(newstate, library);
-    
-    var newutility = terminal ? 
-      (findreward(role, newstate, library) * 1) : 
-      evaluate(role, newstate);
-    
-    node.actions.push(actions[i]);
-    var childNode = makenode(newstate, newcontrol, newutility);
-    childNode.isTerminal = terminal;
-    node.children.push(childNode);
-  }
-  
-  return true;
-}
+      /**
+       * Play function - chooses the next move
+       */
+      function play(move) {
+        // Handle symbolization for moves if necessary
+        if (useSymbol && move !== nil && move !== null) {
+          move = symbolizeatom(move);
+        }
+        
+        // Update state if a move was provided
+        if (move !== nil) {
+          state = simulate(move, state, library);
+          tree = subtree(move, tree);
+        }
+        
+        // Check if it's our turn
+        if (findcontrol(state, library) !== role) {
+          return false;
+        }
+        
+        // Reset metrics for this turn
+        if (metrics) {
+          depthCharges = 0;
+          nodesExplored = 0;
+        }
+        
+        // Check for threats - opponent moves that could lead to immediate loss
+        const opponentMoves = findlegals(state, library);
+        const threats = opponentMoves.filter(move => {
+          const nextState = simulate(move, state, library);
+          return findterminalp(nextState, library) && 
+                parseInt(findreward(role, nextState, library)) === 0;
+        });
+        
+        if (threats.length > 0) {
+          console.log("Found " + threats.length + " threatening moves, looking for counter");
+          const myMoves = shuffle(findlegals(state, library));
+          
+          // Look for a move that prevents all threats
+          for (let i = 0; i < myMoves.length; i++) {
+            const myMove = myMoves[i];
+            const afterMyMove = simulate(myMove, state, library);
+            const opponentReplies = findlegals(afterMyMove, library);
+            
+            if (threats.every(threat => !opponentReplies.includes(threat))) {
+              console.log("Found defensive move against threats");
+              return useSymbol ? unsymbolizeatom(myMove) : myMove;
+            }
+          }
+          
+          // If no perfect defense, just pick the first move
+          console.log("No perfect defense found, using first legal move");
+          return useSymbol ? unsymbolizeatom(myMoves[0]) : myMoves[0];
+        }
+        
+        // Run MCTS search until near playclock deadline
+        const deadline = Date.now() + (playclock - 1) * 1000;
+        let iterations = 0;
+        
+        while (Date.now() < deadline) {
+          process(tree, deadline);
+          iterations++;
+          if(logging == true){
+            if (iterations % 1000 === 0) {
+              const timeRemaining = Math.max(0, (deadline - Date.now()) / 1000);
+              console.log("Time remaining: " + timeRemaining.toFixed(1) + "s, iterations: " + iterations);
+            }
+          }
+        }
+        
+        // Select best move
+        const bestMove = selectBestMove(tree);
+        
+        if (metrics) {
+          console.log("Move selected after " + iterations + " iterations");
+          console.log("- Depth charges: " + depthCharges);
+          console.log("- Nodes explored: " + nodesExplored);
+          console.log("- Selected move: " + bestMove);
+        }
+        
+        // If using symbolization, convert back to original representation
+        return useSymbol ? unsymbolizeatom(bestMove) : bestMove;
+      }
 
-function select(node) {
-  var total = node.visits;
-  var child = node.children[0];
-  var score = ucbValue(child, total);
-  
-  for (var i = 1; i < node.children.length; i++) {
-    var newchild = node.children[i];
-    var newscore = ucbValue(newchild, total);
-    if (newscore > score) {
-      child = newchild;
-      score = newscore;
-    }
-  }
-  
-  return child;
-}
+      /**
+       * Creates an MCTS node
+       */
+      function makenode(state, mover, reward) {
+        if (metrics) {
+          nodesExplored++;
+        }
+        
+        return {
+          state: state,
+          actions: [],
+          children: [],
+          mover: mover,
+          utility: reward,
+          visits: 0,
+          isTerminal: findterminalp(state, library),
+          untried: null  // Will be initialized during expansion
+        };
+      }
 
-function ucbValue(node, parentVisits) {
-  if (node.visits === 0) return Infinity;
-  return (node.utility / node.visits) + C * Math.sqrt(Math.log(parentVisits) / node.visits);
-}
+      /**
+       * Process an MCTS node (recursively)
+       */
+      function process(node, deadline) {
+        if (Date.now() >= deadline) return false;
+        
+        // Selection
+        while ((!node.untried || node.untried.length === 0) && node.children.length > 0) {
+          node = select(node);
+          if (node.isTerminal) {
+            node.utility = parseInt(findreward(role, node.state, library));
+            node.visits += 1;
+            return true;
+          }
+        }
+        
+        // Expansion
+        if (!node.untried) {
+          // Initialize untried actions if this is the first visit
+          node.untried = shuffle(findlegals(node.state, library));
+        }
+        
+        if (node.untried.length > 0) {
+          const action = node.untried.pop();
+          const newState = simulate(action, node.state, library);
+          const newControl = findcontrol(newState, library);
+          const terminal = findterminalp(newState, library);
+          
+          const childNode = makenode(newState, newControl, 0);
+          childNode.isTerminal = terminal;
+          
+          node.actions.push(action);
+          node.children.push(childNode);
+          
+          if (terminal) {
+            childNode.utility = parseInt(findreward(role, newState, library));
+            childNode.visits = 1;
+            update(node, childNode.utility);
+            return true;
+          }
+          
+          // Simulation
+          const reward = runDepthCharge(newState);
+          childNode.utility = reward;
+          childNode.visits = 1;
+          
+          // Backpropagation
+          update(node, reward);
+          return true;
+        }
+        
+        return true;
+      }
 
-function update(node) {
-  if (node.isTerminal) {
-    node.utility = findreward(role, node.state, library) * 1;
-  } else if (node.mover === role) {
-    node.utility = scoremax(node);
-  } else {
-    node.utility = scoremin(node);
-  }
-  
-  node.visits = node.visits + 1;
-  return true;
-}
+      /**
+       * Select the most promising child node using UCB formula
+       */
+      function select(node) {
+        let bestChild = node.children[0];
+        let bestScore = ucbValue(bestChild, node.visits);
+        
+        for (let i = 1; i < node.children.length; i++) {
+          const child = node.children[i];
+          const score = ucbValue(child, node.visits);
+          if (score > bestScore) {
+            bestChild = child;
+            bestScore = score;
+          }
+        }
+        
+        return bestChild;
+      }
 
-function scoremax(node) {
-  if (node.children.length === 0) return node.utility;
-  
-  var score = node.children[0].utility;
-  for (var i = 1; i < node.children.length; i++) {
-    var newscore = node.children[i].utility;
-    if (newscore > score) {
-      score = newscore;
-    }
-  }
-  return score;
-}
+      /**
+       * Calculate UCB value for a node
+       */
+      function ucbValue(node, parentVisits) {
+        if (node.visits === 0) return Infinity;
+        return (node.utility / node.visits) + C * Math.sqrt(Math.log(parentVisits) / node.visits);
+      }
 
-function scoremin(node) {
-  if (node.children.length === 0) return node.utility;
-  
-  var score = node.children[0].utility;
-  for (var i = 1; i < node.children.length; i++) {
-    var newscore = node.children[i].utility;
-    if (newscore < score) {
-      score = newscore;
-    }
-  }
-  return score;
-}
+      /**
+       * Update a node's statistics and propagate up the tree
+       */
+      function update(node, reward) {
+        node.visits += 1;
+        node.utility += reward;
+        return true;
+      }
 
-function subtree(move, node) {
-  if (node.children.length === 0) {
-    expand(node);
-  }
-  
-  for (var i = 0; i < node.actions.length; i++) {
-    if (equalp(move, node.actions[i])) {
-      return node.children[i];
-    }
-  }
-  
-  return node;
-}
+      /**
+       * Run a random playout from the given state
+       */
+      function runDepthCharge(state) {
+        depthCharges++;
+        
+        if (findterminalp(state, library)) {
+          return parseInt(findreward(role, state, library));
+        }
+        
+        const actions = findlegals(state, library);
+        if (actions.length === 0) {
+          return 0;
+        }
+        
+        const randomIndex = Math.floor(Math.random() * actions.length);
+        const newState = simulate(actions[randomIndex], state, library);
+        
+        return runDepthCharge(newState);
+      }
 
-function selectaction(node) {
-  if (!node.children || node.children.length === 0) {
-    return findlegalx(node.state, library);
-  }
-  
-  for (var i = 0; i < node.children.length; i++) {
-    if (node.children[i].isTerminal && node.children[i].utility === 100) {
-      console.log("Found winning move! " + node.actions[i]);
-      return node.actions[i];
-    }
-  }
-  
-  var bestIndex = 0;
-  var bestScore = node.children[0].utility / Math.max(1, node.children[0].visits);
-  var minVisits = Math.max(1, node.visits / (node.children.length * 2));
-  
-  for (var i = 0; i < node.children.length; i++) {
-    var child = node.children[i];
-    var visits = Math.max(1, child.visits);
-    var avgScore = child.utility / visits;
-    
-    if (visits >= minVisits && avgScore > bestScore) {
-      bestIndex = i;
-      bestScore = avgScore;
-    }
-  }
-  
-  console.log("Selected action with avg score: " + bestScore);
-  return node.actions[bestIndex];
-}
+      /**
+       * Find the subtree corresponding to the given move
+       */
+      function subtree(move, node) {
+        if (node.children.length === 0) {
+          // If no children, first expand the node
+          if (!node.untried) {
+            node.untried = shuffle(findlegals(node.state, library));
+          }
+          
+          while (node.untried.length > 0) {
+            const action = node.untried.pop();
+            const newState = simulate(action, node.state, library);
+            const newControl = findcontrol(newState, library);
+            const isTerminal = findterminalp(newState, library);
+            
+            const childNode = makenode(newState, newControl, 0);
+            childNode.isTerminal = isTerminal;
+            
+            node.actions.push(action);
+            node.children.push(childNode);
+            
+            if (equalp(move, action)) {
+              return childNode;
+            }
+          }
+          
+          // If we didn't find the move, create a new node
+          const newState = simulate(move, node.state, library);
+          return makenode(newState, findcontrol(newState, library), 0);
+        }
+        
+        // Look for matching move in existing children
+        for (let i = 0; i < node.actions.length; i++) {
+          if (equalp(move, node.actions[i])) {
+            return node.children[i];
+          }
+        }
+        
+        // If not found, create a new node
+        const newState = simulate(move, node.state, library);
+        return makenode(newState, findcontrol(newState, library), 0);
+      }
 
-function depthcharge(state) {
-  depthcharges++;
-  
-  if (findterminalp(state, library)) {
-    return findreward(role, state, library) * 1;
-  }
-  
-  var actions = findlegals(state, library);
-  if (actions.length === 0) {
-    return 0;
-  }
-  
-  var best = Math.floor(Math.random() * actions.length);
-  var newstate;
-  
-  if (dataindexing) {
-    compexecute(actions[best], state, library);
-    newstate = state;
-  } else {
-    newstate = simulate(actions[best], state, library);
-    newstate = definemorefacts([], newstate);
-  }
-  
-  return depthcharge(newstate);
-}
+      /**
+       * Select the best move from the current tree
+       */
+      function selectBestMove(node) {
+        if (!node.children || node.children.length === 0) {
+          // If no children, get any legal move
+          return findlegals(node.state, library)[0];
+        }
+        
+        // Look for winning moves first
+        for (let i = 0; i < node.children.length; i++) {
+          if (node.children[i].isTerminal && node.children[i].utility === 100) {
+            console.log("Found winning move!");
+            return node.actions[i];
+          }
+        }
+        
+        // Select move with highest visit count
+        let bestIndex = 0;
+        let bestVisits = node.children[0].visits;
+        
+        for (let i = 1; i < node.children.length; i++) {
+          if (node.children[i].visits > bestVisits) {
+            bestIndex = i;
+            bestVisits = node.children[i].visits;
+          }
+        }
+        
+        console.log("Selected move with " + bestVisits + " visits");
+        return node.actions[bestIndex];
+      }
 
-function stop(move) {
-  return false;
-}
+      /* shuffle(arr): Shuffles an input array in place. */
+      function shuffle(array) {
+        for (var i = array.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var temp = array[i];
+          array[i] = array[j];
+          array[j] = temp;
+        }
+        return array;
+      }
 
-function abort() {
-  return false;
-}
+      /* numberize(str): Converts a string to a number. */
+      function numberize(str) {
+        return parseInt(str);
+      }
 
-function ping() {
-  return "ready";
-}
-
-function start(r, rs, sc, pc) {
-  role = r;
-  rules = rs.slice(1);
-  startclock = numberize(sc);
-  playclock = numberize(pc);
-  library = definemorerules([], rules);
-
-  // Grounding code
-  rules = definemorerules([],rules);
-  rules = groundrules(rules);
-
-  roles = findroles(library);
-  state = findinits(library);
-  depthcharges = 0;
-  isInPlay = false;
-  isMultiPlayer = true;
-  C = 1.0;
-  mobilityCoef = 0.2;
-  
-  tree = makenode(state, findcontrol(state, library), evaluate(role, state));
-
-  play(nil);
-
-  return "ready";
-}
-
+      // Support functions
+      function stop(move) { return false; }
+      function abort() { return false; }
+      function ping() { return "ready"; }
 
 //==============================================================================
 // End of player code
