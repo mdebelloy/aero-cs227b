@@ -5,9 +5,30 @@
     <script type='text/javascript' src='../javascript/localstorage.js'></script>
     <script type='text/javascript' src='../metagaming/grounder.js'></script>
     <script type='text/javascript' src='../metagaming/symbolizer.js'></script>
+    
     <script type='text/javascript' src='../reasoning/symbol.js'></script>
+    <script>
+      var symbolFindinits = findinits;
+      var symbolFindlegals = findlegals;
+      var symbolSimulate = simulate;
+      var symbolFindcontrol = findcontrol;
+      var symbolFindterminalp = findterminalp;
+      var symbolFindreward = findreward;
+    </script>
+    
     <script type='text/javascript' src='../gameplaying/pts.js'></script>
     <script type='text/javascript' src='../reasoning/ground.js'></script>
+    <script>
+      var generalFindinits = findinits;
+      var generalFindlegals = findlegals;
+      var generalSimulate = simulate;
+      var generalFindcontrol = findcontrol;
+      var generalFindterminalp = findterminalp;
+      var generalFindreward = findreward;
+    </script>
+    <script type='text/javascript' src='../metagaming/pruner.js'></script>
+    <script type='text/javascript' src='../metagaming/optimizer.js'></script>
+    <script type="text/javascript" src="../metagaming/simplifier.js"></script>
     <script type='text/javascript'>
 
       //==============================================================================
@@ -15,39 +36,40 @@
       //==============================================================================
 
       /*
-        This week, following the assignment, we keep our MCTS player, but run it on grounded and symbolized
-        rules. We tested the three players (last week's with no grounding, grounding with the general interpreter,
-        and symbolizing) on Hunter, Connect 4 and Tic Tac Toe. For Hunter, the Grounded Interpreter performs better
-        than the General Interpreter on ground rules, and both are beatan by the No Grounding player achieves the most
-        depth charges (as seen in the table below). This is likely due to the fact that Hunter has a somewhwat simple rule 
-        structure where grounding introduces overhead without significant benefits. For Connect 4, the General Interpreter
-        had more depth charges during the headstart period than the No Grounding player. Finally, in Tic-tac-toe,
-        both the General Interpreter and Grounded Interpreter significantly outperformed the No Grounding player,
-        with the Grounded Interpreter getting the largest number of depth charges. 
 
-        | Game        | Player Type           | Depth Charges (Headstart)   | Nodes Explored (Headstart)  | Depth Charges (Move 1) | Nodes Explored (Move 1) |
-        |-------------|------------------------|----------------------------|-----------------------------|------------------------|-------------------------|
-        | Hunter      | No Grounding           | 124,460                    | 17,800                      | 266,318                | 38,545                  |
-        | Hunter      | General Interpreter    | 71,091                     | 9,310                       | 93,932                 | 15,447                  |
-        | Hunter      | Grounded Interpreter   | 93,888                     | 12,831                      | 92,698                 | 15,736                  |
-        | Connect4    | No Grounding           | 22,668                     | 1,162                       | 51,690                 | 2,651                   |
-        | Connect4    | General Interpreter    | 39,412                     | 2,057                       | 47,393                 | 2,608                   |
-        | Connect4    | Grounded Interpreter   | 30,531                     | 1,569                       | 33,736                 | 1,776                   |
-        | Tic-tac-toe | No Grounding           | 139,114                    | 48,307                      | 300,442                | 105,705                 |
-        | Tic-tac-toe | General Interpreter    | 226,346                    | 91,035                      | 181,180                | 108,558                 |
-        | Tic-tac-toe | Grounded Interpreter   | 261,114                    | 110,234                     | 211,459                | 135,014                 |
+      Our player this week adds pruning to the MCTS implemenation with groudning and symbolizing from last week.
+      Most of the effort was spent fixing the player that consisitently errored out last week. Once grounding
+      and symbolizing were fixed, we also added in pruning, as was asked for in this assignment. This was then
+      tested on both multiplebuttonsandlights and multiplehunter with and without pruning. The results are 
+      shown in the table below. We also decide to replace the UCB search with UCT, which is more approrpriate
+      for trees. This was done after reading the "Ary, a general game playing program" paper by Jean Méhat and
+      Tristan Cazenave. This change should help the algorithm make better sequential decisions. After playing
+      around with the C exploration vs exploitation constant in a few different games, C was set to 10. The 
+      remaining algorithm uses MCTS like before, also looking for one turn losses to differentiate between 
+      values from unexplored states and immediate losses.
 
 
-        We clearly see that grounding and symbolizing is not always worthwile. We also note some differences between our 
-        results and those from the slides' grounding experiments. This may imply that our implementation is somewhat
-        flawed, and still needs some work. The implementation is mostly the same as last week's: We are running
-        MCTS using Upper Confidence Bounds with both a headstart and bigswitch strategy. However, during the start 
-        period, we are attempting to ground and symbolize the rules. If this fails or times out, we fall back to the 
-        general interpreter.
 
+      | Game                     | Pruning | Phase       | Depth Charges  | Nodes Explored | Tree Size  | Max Depth   | 
+      |--------------------------|---------|-------------|----------------|----------------|------------|-------------|
+      | Multiplebuttonsandlights | No      | Startclock   | 21926          | 21927          | 21927      | 14         |
+      |                          | No      | First Move   | 27667          | 27667          | 49594      | 15         |
+      |                          | Yes     | Startclock   | 22151          | 22152          | 22152      | 18         |
+      |                          | Yes     | First Move   | 28502          | 28502          | 70720      | 19         |
+      | Multiplehunter           | No      | Startclock   | 9756           | 9757           | 9757       | 30         |
+      |                          | No      | First Move   | 11267          | 11267          | 21024      | 37         |
+      |                          | Yes     | Startclock   | 9172           | 9173           | 9173       | 36         |
+      |                          | Yes     | First Move   | 8788           | 8788           | 17961      | 45         |
+
+
+      We first note that, since pruning takes time, during the start clock, the algorithm does fewer depth charges.
+      We also note that during the first move, the number of depth charges and the tree size are relatively similar
+      with and without pruning. However,  the tree size increases substantially with pruning enabled, which implies
+      that the smaller rule set lets us explore further. This is confirmed by seeing that the maximum depth of the 
+      tree searched increases significantly with pruning. In these two games, it is clear that pruning allows
+      for a deeper exploration of the game tree. 
 
       */
-
 
       var manager = 'manager';
       var player = 'aero';
@@ -62,22 +84,22 @@
       var state = [];
 
       var tree;
-      var C = 1.0; 
+      var C = 10; 
       var depthCharges = 0;
       var nodesExplored = 0;
       var metrics = false;
       var logging = false;
-      var useSymbol = false;  
+      var useSymbol = false;
+      var usePrune = true;
 
-      // Store original functions to restore them if needed
-      var originalFindinits = findinits;
-      var originalFindlegals = findlegals;
-      var originalSimulate = simulate;
-      var originalFindcontrol = findcontrol;
-      var originalFindterminalp = findterminalp;
-      var originalFindreward = findreward;
+      var findinitsFn,
+          findlegalsFn,
+          simulateFn,
+          findcontrolFn,
+          findterminalpFn,
+          findrewardFn;
 
-      /* shuffle(arr): Shuffles an input array in place. */
+      // shuffle array in place
       function shuffle(array) {
         for (var i = array.length - 1; i > 0; i--) {
           var j = Math.floor(Math.random() * (i + 1));
@@ -88,434 +110,341 @@
         return array;
       }
 
-      /* numberize(str): Converts a string to a number. */
+      // convert string to number
       function numberize(str) {
         return parseInt(str);
       }
 
-      /**
-       * Start function - initializes the player
-       */
+      // start function with pruning, grounding, and symbolizing
       function start(r, rs, sc, pc) {
         role = r;
         rules = rs.slice(1);
         startclock = numberize(sc);
         playclock = numberize(pc);
 
-        // Reset metrics
         if (metrics) {
           depthCharges = 0;
           nodesExplored = 0;
+        }
+
+        if (usePrune){
+          console.log("Using pruning")
+          rules = prunerulesubgoals(rules);
+          rules = prunerules(rules);
+          rules = fixrules(rules);
+        }
+        else{
+          console.log("Not using pruning")
         }
 
         console.log("Starting with " + rules.length + " rules");
-        
-        // First define the rules using the general approach
         rules = definemorerules([], rules);
-        
-        // Try to ground the rules
+
         console.log("Attempting to ground rules...");
-        const groundDeadline = Date.now() + (startclock * 500); // Use half the start clock
-        const groundedRules = groundrulesWithDeadline(rules, groundDeadline);
-        
-        if (groundedRules) {
-          console.log("Grounding successful: " + groundedRules.length + " ground rules");
-          
-          // Try to symbolize the ground rules
+        const grounded = groundrules(rules, startclock * 500);
+
+        if (grounded !== false) {
+          console.log("Grounding successful, attempting symbolization");
           try {
-            console.log("Attempting to symbolize ground rules...");
-            const symbolizedRules = symbolizerules(groundedRules);
-            rules = symbolizedRules;
+            rules = symbolizerules(grounded);
             useSymbol = true;
-            
-            // Override interpreter functions with symbol.js versions
-            window.findinits = findinnits;
-            window.findlegals = findlegas;
-            window.simulate = simulate;
-            window.findcontrol = findcontrol;
-            window.findterminalp = findterminalp;
-            window.findreward = findreward;
-            
+
+            findinitsFn = symbolFindinits;
+            findlegalsFn = symbolFindlegals;
+            simulateFn = symbolSimulate;
+            findcontrolFn = symbolFindcontrol;
+            findterminalpFn = symbolFindterminalp;
+            findrewardFn = symbolFindreward;
+
             console.log("Using symbol interpreter");
           } catch (error) {
-            console.warn("Symbolization failed: " + error);
-            // Fall back to original interpreter
+            console.log("Symbolization failed: " + error);
             useSymbol = false;
-            console.log("Using general interpreter");
+            rules = grounded;
+            setupGeneralInterpreter();
           }
         } else {
-          console.log("Grounding failed or timed out, using original rules");
+          console.log("Grounding failed, using general interpreter");
           useSymbol = false;
-          console.log("Using general interpreter");
+          setupGeneralInterpreter();
         }
-        
-        // Build the final library
+
+        rules = definemorerules([], rules);
         library = definemorerules([], rules);
         roles = findroles(library);
-        state = findinits(library);
-        
-        // Create initial MCTS tree
-        tree = makenode(state, findcontrol(state, library), 0);
-        
-        // Use any remaining startclock time for initial MCTS search
-        const headstartDeadline = Date.now() + Math.max(1, startclock - 2) * 1000;
+        state = findinitsFn(library);
+        tree = makeNode(state, null, null);
+
+        const headstartDeadline = Date.now() + startclock * 1000;
         let iterations = 0;
-        
+
         while (Date.now() < headstartDeadline) {
-          process(tree, headstartDeadline);
+          processMCS(tree);
           iterations++;
-          if(logging == true){
-            if (iterations % 1000 === 0) {
-              var timeRemaining = Math.max(0, (headstartDeadline - Date.now()) / 1000);
-              console.log("Headstart - Time remaining: " + timeRemaining.toFixed(1) + 
-                          "s, iterations: " + iterations);
-            }
+          if (logging && iterations % 1000 === 0) {
+            var timeRemaining = Math.max(0, (headstartDeadline - Date.now()) / 1000);
+            console.log("Headstart - Time remaining: " + timeRemaining.toFixed(1) + 
+                        "s, iterations: " + iterations);
           }
         }
-        
+
         if (metrics) {
+          const treeSize = countNodes(tree);
+          const treeDepth = getTreeDepth(tree);
           console.log("Headstart complete - " + iterations + " iterations, " + 
                       depthCharges + " depth charges, " + nodesExplored + " nodes explored");
+          console.log("Tree size: " + treeSize + " nodes, max depth: " + treeDepth);
         }
-        
+
         return "ready";
       }
 
-      /**
-       * Play function - chooses the next move
-       */
-      function play(move) {
-        // Handle symbolization for moves if necessary
+      // setup general interpreter functions
+      function setupGeneralInterpreter() {
+        findinitsFn = generalFindinits;
+        findlegalsFn = generalFindlegals;
+        simulateFn = generalSimulate;
+        findcontrolFn = generalFindcontrol;
+        findterminalpFn = generalFindterminalp;
+        findrewardFn = generalFindreward;
+
+        console.log("Using general interpreter");
+      }
+
+      // play function with threat detection and MCTS
+      function play(rawMove) {
+        var move = rawMove;
+
         if (useSymbol && move !== nil && move !== null) {
           move = symbolizeatom(move);
         }
-        
-        // Update state if a move was provided
-        if (move !== nil) {
-          state = simulate(move, state, library);
+
+        if (move !== nil && move !== null) {
           tree = subtree(move, tree);
+          state = tree.state;
         }
-        
-        // Check if it's our turn
-        if (findcontrol(state, library) !== role) {
+
+        if (findcontrolFn(state, library) !== role) {
           return false;
         }
-        
-        // Reset metrics for this turn
+
         if (metrics) {
           depthCharges = 0;
           nodesExplored = 0;
         }
-        
-        // Check for threats - opponent moves that could lead to immediate loss
-        const opponentMoves = findlegals(state, library);
-        const threats = opponentMoves.filter(move => {
-          const nextState = simulate(move, state, library);
-          return findterminalp(nextState, library) && 
-                parseInt(findreward(role, nextState, library)) === 0;
+
+        const opponentMoves = findlegalsFn(state, library);
+        const oneturnLosses = opponentMoves.filter(function(opponentMove) {
+          const nextState = simulateFn(opponentMove, state, library);
+          return findterminalpFn(nextState, library) && 
+                parseInt(findrewardFn(role, nextState, library)) === 0;
         });
-        
-        if (threats.length > 0) {
-          console.log("Found " + threats.length + " threatening moves, looking for counter");
-          const myMoves = shuffle(findlegals(state, library));
-          
-          // Look for a move that prevents all threats
+
+        if (oneturnLosses.length > 0) {
+          console.log("Found " + oneturnLosses.length + " one-turn losses, looking for counter");
+          const myMoves = shuffle(findlegalsFn(state, library));
           for (let i = 0; i < myMoves.length; i++) {
-            const myMove = myMoves[i];
-            const afterMyMove = simulate(myMove, state, library);
-            const opponentReplies = findlegals(afterMyMove, library);
-            
-            if (threats.every(threat => !opponentReplies.includes(threat))) {
-              console.log("Found defensive move against threats");
-              return useSymbol ? unsymbolizeatom(myMove) : myMove;
+            const curMove = myMoves[i];
+            const afterMyMove = simulateFn(curMove, state, library);
+            const opponentReplies = findlegalsFn(afterMyMove, library);
+            if (oneturnLosses.every(function(loss) { 
+              return !opponentReplies.includes(loss); 
+            })) {
+              console.log("Found move avoiding one-turn loss");
+              return useSymbol ? unsymbolizeatom(curMove) : curMove;
             }
           }
-          
-          // If no perfect defense, just pick the first move
           console.log("No perfect defense found, using first legal move");
           return useSymbol ? unsymbolizeatom(myMoves[0]) : myMoves[0];
         }
-        
-        // Run MCTS search until near playclock deadline
-        const deadline = Date.now() + (playclock - 1) * 1000;
-        let iterations = 0;
-        
-        while (Date.now() < deadline) {
-          process(tree, deadline);
-          iterations++;
-          if(logging == true){
-            if (iterations % 1000 === 0) {
-              const timeRemaining = Math.max(0, (deadline - Date.now()) / 1000);
-              console.log("Time remaining: " + timeRemaining.toFixed(1) + "s, iterations: " + iterations);
-            }
-          }
-        }
-        
-        // Select best move
-        const bestMove = selectBestMove(tree);
-        
+
+        const bestMove = playmcs();
+
         if (metrics) {
-          console.log("Move selected after " + iterations + " iterations");
+          const treeSize = countNodes(tree);
+          const treeDepth = getTreeDepth(tree);
+          console.log("Move selected");
           console.log("- Depth charges: " + depthCharges);
           console.log("- Nodes explored: " + nodesExplored);
+          console.log("- Tree size: " + treeSize + " nodes, max depth: " + treeDepth);
           console.log("- Selected move: " + bestMove);
         }
-        
-        // If using symbolization, convert back to original representation
+
         return useSymbol ? unsymbolizeatom(bestMove) : bestMove;
       }
 
-      /**
-       * Creates an MCTS node
-       */
-      function makenode(state, mover, reward) {
+      // run MCTS until deadline
+      function playmcs() {
+        const deadline = Date.now() + Math.max(playclock - 1, 0) * 1000;
+        let iterations = 0;
+
+        while (Date.now() < deadline) {
+          processMCS(tree);
+          iterations++;
+          if (logging && iterations % 1000 === 0) {
+            const timeRemaining = Math.max(0, (deadline - Date.now()) / 1000);
+            console.log("Time remaining: " + timeRemaining.toFixed(1) + "s, iterations: " + iterations);
+          }
+        }
+
+        return selectBestUCTMove(tree);
+      }
+
+      // create new node with state and move
+      function makeNode(state, parent, move) {
         if (metrics) {
           nodesExplored++;
         }
-        
+
         return {
           state: state,
-          actions: [],
+          parent: parent,
+          move: move,
+          w: 0,
+          n: 0,
           children: [],
-          mover: mover,
-          utility: reward,
-          visits: 0,
-          isTerminal: findterminalp(state, library),
-          untried: null  // Will be initialized during expansion
+          untried: shuffle(findlegalsFn(state, library))
         };
       }
 
-      /**
-       * Process an MCTS node (recursively)
-       */
-      function process(node, deadline) {
-        if (Date.now() >= deadline) return false;
-        
-        // Selection
-        while ((!node.untried || node.untried.length === 0) && node.children.length > 0) {
-          node = select(node);
-          if (node.isTerminal) {
-            node.utility = parseInt(findreward(role, node.state, library));
-            node.visits += 1;
-            return true;
-          }
+      // single MCTS iteration with selection, expansion, simulation, backpropagation
+      function processMCS(root) {
+        var node = root;
+
+        while (node.untried.length === 0 && node.children.length > 0) {
+          node = bestUCTChild(node);
         }
-        
-        // Expansion
-        if (!node.untried) {
-          // Initialize untried actions if this is the first visit
-          node.untried = shuffle(findlegals(node.state, library));
-        }
-        
+
         if (node.untried.length > 0) {
-          const action = node.untried.pop();
-          const newState = simulate(action, node.state, library);
-          const newControl = findcontrol(newState, library);
-          const terminal = findterminalp(newState, library);
-          
-          const childNode = makenode(newState, newControl, 0);
-          childNode.isTerminal = terminal;
-          
-          node.actions.push(action);
-          node.children.push(childNode);
-          
-          if (terminal) {
-            childNode.utility = parseInt(findreward(role, newState, library));
-            childNode.visits = 1;
-            update(node, childNode.utility);
-            return true;
-          }
-          
-          // Simulation
-          const reward = runDepthCharge(newState);
-          childNode.utility = reward;
-          childNode.visits = 1;
-          
-          // Backpropagation
-          update(node, reward);
-          return true;
+          const move = node.untried.pop();
+          const newState = simulateFn(move, node.state, library);
+          const child = makeNode(newState, node, move);
+          node.children.push(child);
+          node = child;
         }
-        
-        return true;
+
+        const reward = runDepthCharge(node.state);
+
+        while (node) {
+          node.n += 1;
+          node.w += reward;
+          node = node.parent;
+        }
       }
 
-      /**
-       * Select the most promising child node using UCB formula
-       */
-      function select(node) {
-        let bestChild = node.children[0];
-        let bestScore = ucbValue(bestChild, node.visits);
-        
-        for (let i = 1; i < node.children.length; i++) {
+      // select child using UCT formula
+      function bestUCTChild(node) {
+        var bestScore = -Infinity;
+        var bestNode = node.children[0];
+
+        for (var i = 0; i < node.children.length; i++) {
           const child = node.children[i];
-          const score = ucbValue(child, node.visits);
+          const exploit = child.w / child.n;
+          const explore = C * Math.sqrt(Math.log(node.n) / child.n);
+          const score = exploit + explore;
+
           if (score > bestScore) {
-            bestChild = child;
             bestScore = score;
+            bestNode = child;
           }
         }
-        
-        return bestChild;
+
+        return bestNode;
       }
 
-      /**
-       * Calculate UCB value for a node
-       */
-      function ucbValue(node, parentVisits) {
-        if (node.visits === 0) return Infinity;
-        return (node.utility / node.visits) + C * Math.sqrt(Math.log(parentVisits) / node.visits);
-      }
-
-      /**
-       * Update a node's statistics and propagate up the tree
-       */
-      function update(node, reward) {
-        node.visits += 1;
-        node.utility += reward;
-        return true;
-      }
-
-      /**
-       * Run a random playout from the given state
-       */
-      function runDepthCharge(state) {
-        depthCharges++;
-        
-        if (findterminalp(state, library)) {
-          return parseInt(findreward(role, state, library));
-        }
-        
-        const actions = findlegals(state, library);
-        if (actions.length === 0) {
-          return 0;
-        }
-        
-        const randomIndex = Math.floor(Math.random() * actions.length);
-        const newState = simulate(actions[randomIndex], state, library);
-        
-        return runDepthCharge(newState);
-      }
-
-      /**
-       * Find the subtree corresponding to the given move
-       */
+      // find existing child node or create new one for move
       function subtree(move, node) {
-        if (node.children.length === 0) {
-          // If no children, first expand the node
-          if (!node.untried) {
-            node.untried = shuffle(findlegals(node.state, library));
-          }
-          
-          while (node.untried.length > 0) {
-            const action = node.untried.pop();
-            const newState = simulate(action, node.state, library);
-            const newControl = findcontrol(newState, library);
-            const isTerminal = findterminalp(newState, library);
-            
-            const childNode = makenode(newState, newControl, 0);
-            childNode.isTerminal = isTerminal;
-            
-            node.actions.push(action);
-            node.children.push(childNode);
-            
-            if (equalp(move, action)) {
-              return childNode;
-            }
-          }
-          
-          // If we didn't find the move, create a new node
-          const newState = simulate(move, node.state, library);
-          return makenode(newState, findcontrol(newState, library), 0);
-        }
-        
-        // Look for matching move in existing children
-        for (let i = 0; i < node.actions.length; i++) {
-          if (equalp(move, node.actions[i])) {
+        for (var i = 0; i < node.children.length; i++) {
+          if (equalp(move, node.children[i].move)) {
             return node.children[i];
           }
         }
-        
-        // If not found, create a new node
-        const newState = simulate(move, node.state, library);
-        return makenode(newState, findcontrol(newState, library), 0);
+
+        const newState = simulateFn(move, node.state, library);
+        return makeNode(newState, null, null);
       }
 
-      /**
-       * Select the best move from the current tree
-       */
-      function selectBestMove(node) {
-        if (!node.children || node.children.length === 0) {
-          // If no children, get any legal move
-          return findlegals(node.state, library)[0];
+      // select move with best average reward
+      function selectBestUCTMove(root) {
+        if (!root.children || root.children.length === 0) {
+          const legals = findlegalsFn(root.state, library);
+          return legals.length > 0 ? legals[0] : null;
         }
-        
-        // Look for winning moves first
-        for (let i = 0; i < node.children.length; i++) {
-          if (node.children[i].isTerminal && node.children[i].utility === 100) {
-            console.log("Found winning move!");
-            return node.actions[i];
+
+        var bestChild = root.children[0];
+        var bestValue = bestChild.w / bestChild.n;
+
+        for (var i = 1; i < root.children.length; i++) {
+          const child = root.children[i];
+          const value = child.w / child.n;
+          if (value > bestValue) {
+            bestValue = value;
+            bestChild = child;
           }
         }
-        
-        // Select move with highest visit count
-        let bestIndex = 0;
-        let bestVisits = node.children[0].visits;
-        
-        for (let i = 1; i < node.children.length; i++) {
-          if (node.children[i].visits > bestVisits) {
-            bestIndex = i;
-            bestVisits = node.children[i].visits;
+
+        console.log("Selected move with " + bestChild.n + " visits");
+        return bestChild.move;
+      }
+
+      // count total nodes in tree
+      function countNodes(node, visited = new Set()) {
+          if (!node || visited.has(node)) return 0;
+          visited.add(node);
+
+          var count = 1;
+          for (var i = 0; i < node.children.length; i++) {
+            count += countNodes(node.children[i], visited);
+          }
+          return count;
+        }
+
+      // get maximum depth of tree
+      function getTreeDepth(node) {
+        if (!node || node.children.length === 0) {
+          return 1;
+        }
+
+        var maxChildDepth = 0;
+        for (var i = 0; i < node.children.length; i++) {
+          var childDepth = getTreeDepth(node.children[i]);
+          if (childDepth > maxChildDepth) {
+            maxChildDepth = childDepth;
           }
         }
+
+        return 1 + maxChildDepth;
+      }
+
+      // random playout to terminal state
+      function runDepthCharge(s) {
+        depthCharges++;
+        var state = s;
+        var total = 0;
+
+        while (!findterminalpFn(state, library)) {
+          total += parseInt(findrewardFn(role, state, library), 10);
+          const moves = findlegalsFn(state, library);
+          if (moves.length === 0) break;
+          state = simulateFn(moves[(Math.floor(Math.random() * (moves.length)))], state, library);
+        }
+
+        total += parseInt(findrewardFn(role, state, library), 10);
+        return total;
+      }
+
+      function stop(move) { 
+        return false; 
+      }
+
+      function abort() { 
+        return false; 
+      }
+
+      function ping() { 
+        return "ready"; 
+      }
         
-        console.log("Selected move with " + bestVisits + " visits");
-        return node.actions[bestIndex];
-      }
-
-      /* shuffle(arr): Shuffles an input array in place. */
-      function shuffle(array) {
-        for (var i = array.length - 1; i > 0; i--) {
-          var j = Math.floor(Math.random() * (i + 1));
-          var temp = array[i];
-          array[i] = array[j];
-          array[j] = temp;
-        }
-        return array;
-      }
-
-      /* numberize(str): Converts a string to a number. */
-      function numberize(str) {
-        return parseInt(str);
-      }
-
-      function groundrulesWithDeadline(rawRules, deadline) {
-        // --- quick exit for tiny games -------------------------------------------
-        if (rawRules.length < 200) return groundrules(rawRules);
-        // --- local working copies -------------------------------------------------
-        const grounded = [];
-        let agenda = rawRules.slice();           // rules still to ground
-        // --- helper to ground one rule -------------------------------------------
-        function groundOne(rule) {
-          // (reuse the library's own helper)
-          grounded.push.apply(grounded, groundrule(rule));
-        }
-        // --- main loop ------------------------------------------------------------
-        while (agenda.length) {
-          if (Date.now() >= deadline) {
-            console.warn("[grounder] Deadline hit → abort grounding, use raw rules");
-            return null;                            // signal timeout
-          }
-          const r = agenda.pop();
-          groundOne(r);
-        }
-        return grounded;
-      }
-
-      // Support functions
-      function stop(move) { return false; }
-      function abort() { return false; }
-      function ping() { return "ready"; }
-
 //==============================================================================
 // End of player code
 //==============================================================================
