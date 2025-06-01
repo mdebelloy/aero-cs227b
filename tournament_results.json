@@ -1,0 +1,11 @@
+{
+  "game": "TicTacToe3",
+  "opponent": "zj",
+  "totalGames": 10,
+  "results": {
+    "wins": 0,
+    "draws": 10,
+    "losses": 0
+  },
+  "timestamp": "2025-06-01T01:56:01.094Z"
+}
