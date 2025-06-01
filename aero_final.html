@@ -62,6 +62,18 @@ We note that this implementation does not have a timing mechanism and will time 
 games where the 10-20 seconds of play time are not enough to explore the whole tree. It can also 
 time out sometimes when going first on tictactoe
 
+
+6. Alpha-Beta with time control – this is the code that is active. We replaced the old bestmove with a bounded search that uses alpha-beta pruning to skip branches that cannot change the final decision
+stops at depth = MAX\_DEPTH or when the play-clock says we have ≤100 ms left
+falls back on a tiny heuristic (evaluate) when we cut the search short (currently just “how many legal moves do I still have?”)
+
+The play loop is the same skeleton from lecture: update state, compute a move, return a move.
+All of our “brains” live in one of three blocks (Legal, Random, AlphaBeta). We just swap which bestmove is called.
+Timing control lives in two globals: deadline (absolute time this move must finish) and TIME\_BUFFER\_MS (safety gap so we don’t hit the wall).
+*AlphaBeta is completely stateless – we pass state and the depth left, and it gives back a number. That keeps the recursion simple and makes it easy to plug in a better evaluate later.
+
+TL;DR – we kept the original minimax code for reference, slipped alpha-beta in front, and wrapped the whole thing in a timer so the bot always replies instead of dying on deep games.
+
 */
 //==============================================================================
 
@@ -129,7 +141,6 @@ function minimax(curState) {
 */
 
 
-var isFirstMove = true;
 
 // function maximax(state) {
 //   //Return rewards for each role at terminal state
@@ -203,6 +214,7 @@ var isFirstMove = true;
 // }
 
 
+var isFirstMove = true;
 
 
 function ping ()
