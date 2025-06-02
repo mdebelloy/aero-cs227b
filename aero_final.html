@@ -1,0 +1,476 @@
+<html>
+
+<!--=======================================================================-->
+
+<head>
+  <title>Aero</title>
+  <script type='text/javascript' src='http://epilog.stanford.edu/javascript/epilog.js'></script>
+  <script type='text/javascript' src='http://gamemaster.stanford.edu/javascript/localstorage.js'></script>
+  <script type='text/javascript' src='http://gamemaster.stanford.edu/interpreter/general.js'></script>
+  <script type='text/javascript'>
+//==============================================================================
+
+
+var manager = 'manager';
+var player = 'aero';
+
+var role = 'robot';
+var rules = [];
+var startclock = 10;
+var playclock = 10;
+
+var library = [];
+var roles = [];
+var state = [];
+
+//==============================================================================
+/*
+Writeup:
+
+1. The legal player was already supplied as the sample player from the website. Simply uploading it
+to gamemaster in the html file under our player's name completed this part of the assignment.
+
+2. The random player was very similar, but the play function had one difference, as noted in 
+class and in the class slides. Instead of simply finding a legal action, we find all legal actions
+and return a randomly chosen one as:
+"return findlegals(state,library)[randomindex(findlegals(state,library).length)]"
+
+3. We then implemented a minimax player for single player games. This looks a lot like the 2 player
+minimax code in the commented out section below, but we only maximize until we get to the end of the 
+game tree. Namely, we look at the current game state and recurse down the game tree looking for the path
+that yields the optimal end reward. Since there is no adversarial player, we simply pick an action 
+that will yield the optimal reward. Since rewards are bound between 0 and 100, we can end the recursion
+early once we find a branch that gives a reward of 100. This helps speed up play time.
+
+4. The minimax player for 2 player games we implemented considers the current game state, and then
+for all possible moves recursively calls the minimax function in the following game state, alternating 
+whether the current player is active or not with each layer of recursion. If the current player
+is active, the minimax player tries to maximize the reward function; otherwise, the minimax
+player tries to minimize the reward function. Our implementation searches the entire game 
+tree for all possible terminal states and chooses whichever state is reached by the minimax 
+algorithm. The code for this implemntation is the following functions commented out below:
+ maximize, minimize, bestmove, and minimax.
+
+5. The maximax player our group implemented considers the current game state and current player,
+and then for all possible moves recursively calls the maximax function for the following game 
+state and the next player. The maximax player chooses the move that maximizes the function for 
+the current player. Our implementation searches the entire game tree for all possible terminal 
+states before making its decision, stopping early if it finds a tree that yields a result of 100
+The code is the currently active / not commented out code below, which closely follows the code from lecture.
+
+We note that this implementation does not have a timing mechanism and will time out on more complex
+games where the 10-20 seconds of play time are not enough to explore the whole tree. It can also 
+time out sometimes when going first on tictactoe
+
+
+6. Alpha-Beta with time control – this is the code that is active. We replaced the old bestmove with a bounded search that uses alpha-beta pruning to skip branches that cannot change the final decision
+stops at depth = MAX\_DEPTH or when the play-clock says we have ≤100 ms left
+falls back on a tiny heuristic (evaluate) when we cut the search short (currently just “how many legal moves do I still have?”)
+
+The play loop is the same skeleton from lecture: update state, compute a move, return a move.
+All of our “brains” live in one of three blocks (Legal, Random, AlphaBeta). We just swap which bestmove is called.
+Timing control lives in two globals: deadline (absolute time this move must finish) and TIME\_BUFFER\_MS (safety gap so we don’t hit the wall).
+*AlphaBeta is completely stateless – we pass state and the depth left, and it gives back a number. That keeps the recursion simple and makes it easy to plug in a better evaluate later.
+
+TL;DR – we kept the original minimax code for reference, slipped alpha-beta in front, and wrapped the whole thing in a timer so the bot always replies instead of dying on deep games.
+
+*/
+//==============================================================================
+
+
+/* MINIMAX PLAYER COMPLETE
+function maximize(curState) {
+  var actions = findlegals(curState, library);
+  if (actions.length === 0) {return 0;}
+  
+  var score = -1;
+  for (var i = 0; i < actions.length; i++) {
+    var newstate = simulate(actions[i], curState, library);
+    var newscore = minimax(newstate);
+    if (Number(newscore) > Number(score)) {score = newscore;}
+  }
+  return score;
+}
+
+function minimize(curState) {
+  var opponent = roles.filter(r => r !== role)[0];
+  var actions = findlegals(curState, library);
+  if (actions.length === 0) {return 0;}
+  
+  var score = 101; 
+  for (var i = 0; i < actions.length; i++) {
+    var newstate = simulate(actions[i], curState, library);
+    var newscore = minimax(newstate);
+    if (Number(newscore) < Number(score)) {score = newscore;}
+  }
+  return score;
+}
+
+function bestmove(curState) {
+  var actions = findlegals(curState, library);
+  if (actions.length === 0) {return null;}
+  
+  var bestAction = null;
+  var bestScore = -1;
+  
+  for (var i = 0; i < actions.length; i++) {
+    var newstate = simulate(actions[i], curState, library);
+    var newscore = minimax(newstate);
+
+    if (Number(newscore) > Number(bestScore)) {
+      bestScore = Number(newscore);
+      bestAction = actions[i];
+    }
+  }
+
+  return bestAction;
+}
+
+function minimax(curState) {
+  if (findterminalp(curState, library)) {
+    return findreward(role, curState, library);
+  }
+  
+  var active = findcontrol(curState, library);
+  if (active === role) {
+    return maximize(curState);
+  } else {
+    return minimize(curState);
+  }
+}
+*/
+
+
+
+// function maximax(state) {
+//   //Return rewards for each role at terminal state
+//   if (findterminalp(state, library)) {
+//     var vector = {};
+//     for (var i = 0; i < roles.length; i++) {
+//       vector[roles[i]] = findreward(roles[i], state, library) * 1;
+//     }
+//     return vector;
+//   }
+//   var active = findcontrol(state, library);
+//   var actions = findlegals(state, library);
+//   var vector = {};
+//   for (var i = 0; i < roles.length; i++) {
+//     vector[roles[i]] = -1;
+//   }
+//   // loop over potential actions and recurse
+//   for (var i = 0; i < actions.length; i++) {
+//     var newstate = simulate(actions[i], state, library);
+//     var newvector = maximax(newstate); 
+//     if (Number(newvector[active]) < Number(vector[active])) { continue; }
+//     if (Number(newvector[active]) > Number(vector[active])) { vector = newvector; }
+//     for (var j = 0; j < roles.length; j++) {
+//       if (roles[j] !== active) {
+//         vector[roles[j]] = Math.min(vector[roles[j]], newvector[roles[j]]);
+//       }
+//     }
+    
+//     //early termination for first move only
+//     if (isFirstMove && vector[role] == 100) {
+//       console.log("returning early")
+//       return vector;
+//     }
+//   }
+//   return vector;
+// }
+
+
+// function bestmove(curState) {
+//   console.log("Getting best move");
+//   var actions = findlegals(curState, library);
+//   if (actions.length === 0) { return null; }
+
+//   if (isFirstMove) {
+//     console.log("First move, decreasing action space");
+//     actions = actions.slice(0, 5);
+//   }
+
+//   var bestAction = actions[0];
+//   var bestScore = -1;
+
+//   for (var i = 0; i < actions.length; i++) {
+//     var newstate = simulate(actions[i], curState, library);
+//     var vector = maximax(newstate);
+//     var myScore = Number(vector[role]);
+
+//     if (myScore > bestScore) {
+//       bestScore = myScore;
+//       bestAction = actions[i];
+//     }
+//     if(bestScore == 100){
+//         console.log("found best score");
+//         console.log("Best action:", bestAction);
+//         return bestAction;
+//     }
+//   }
+
+//   console.log("Best action:", bestAction);
+
+//   return bestAction;
+// }
+
+
+var isFirstMove = true;
+
+
+function ping ()
+ {return 'ready'}
+
+function start (r,rs,sc,pc)
+ {role = r;
+  rules = rs.slice(1);
+  startclock = numberize(sc);
+  playclock = numberize(pc);
+  library = definemorerules([],rules);
+  roles = findroles(library);
+  state = findinits(library);
+  console.log("Starting Game!");
+  return 'ready'}
+
+// function play (move)
+//  {
+//  console.log(move)
+//  if (move!==nil) {
+//     state = simulate(move,state,library);
+//     isFirstMove = false;
+//     };
+//  if (findcontrol(state,library)!==role) {return false};
+//  return bestmove(state)}
+
+
+// ===================== ALPHA-BETA PLAYER WITH TIMEOUTS =====================
+
+// Global variable to store the absolute time (in ms since epoch) when we must return a move.
+// We set this at the start of each play() call, based on the playclock.
+var deadline = 0;
+
+// Maximum search depth for our alpha-beta search. This limits how far ahead we look.
+var MAX_DEPTH = 9;
+
+// Time buffer (in milliseconds) to stop searching before the actual deadline.
+var TIME_BUFFER_MS = 100;
+
+// Helper function: returns true if we've reached (or are very close to) the deadline.
+// We use this to abort our search and return a move before we time out.
+function deadlineExceeded() {
+  // Date.now() returns the current time in ms since epoch.
+  // We subtract TIME_BUFFER_MS to give ourselves a safety margin.
+  return Date.now() >= deadline - TIME_BUFFER_MS;
+}
+
+// Evaluation function: estimates the value of a state for our player.
+// If the state is terminal, we return the true reward.
+// Otherwise, we use a simple heuristic: the number of legal moves available.
+// This can be improved for specific games (e.g., Tic-Tac-Toe).
+function evaluate(state) {
+  // If the game is over, return the actual reward for our role.
+  if (findterminalp(state, library)) {
+    return findreward(role, state, library);
+  }
+  // Heuristic: more legal moves is generally better (keeps options open).
+  // For more complex games, we could add more sophisticated logic here.
+  return findlegals(state, library).length;
+}
+
+// Alpha-beta search: recursively searches the game tree up to a depth limit,
+// using alpha-beta pruning to eliminate branches that can't affect the outcome.
+// - state: the current game state
+// - depth: how many more plies to search (decreases each call)
+// - alpha: best value found so far for the maximizer (us)
+// - beta: best value found so far for the minimizer (opponent)
+// - maximizing: true if it's our turn to maximize, false if opponent's turn
+function alphabeta(state, depth, alpha, beta, maximizing) {
+  // If we're out of time, return a heuristic evaluation immediately.
+  if (deadlineExceeded()) {
+    return evaluate(state);
+  }
+
+  // If we've reached the depth limit or a terminal state, evaluate the state.
+  if (depth === 0 || findterminalp(state, library)) {
+    return evaluate(state);
+  }
+
+  // Get all legal actions for the current player in this state.
+  var actions = findlegals(state, library);
+  // If there are no legal actions, evaluate the state (shouldn't usually happen).
+  if (actions.length === 0) return evaluate(state);
+
+  // If it's our turn (maximizing), try to maximize our score.
+  if (maximizing) {
+    var value = -Infinity; // Start with the lowest possible value.
+    for (var i = 0; i < actions.length; i++) {
+      // Simulate the result of taking this action.
+      var child = simulate(actions[i], state, library);
+      // Recursively evaluate the resulting state, now minimizing (opponent's turn).
+      var childVal = alphabeta(child, depth - 1, alpha, beta, false);
+      // Update the best value found so far.
+      value = Math.max(value, childVal);
+      // Update alpha (the best value for the maximizer).
+      alpha = Math.max(alpha, value);
+      // If our best is at least as good as the opponent's best, prune the rest.
+      if (beta <= alpha) break; // Beta cutoff: no need to check further.
+    }
+    return value;
+  } else {
+    // Opponent's turn: try to minimize our score.
+    var value = Infinity; // Start with the highest possible value.
+    for (var i = 0; i < actions.length; i++) {
+      // Simulate the result of the opponent's action.
+      var child = simulate(actions[i], state, library);
+      // Recursively evaluate the resulting state, now maximizing (our turn).
+      var childVal = alphabeta(child, depth - 1, alpha, beta, true);
+      // Update the best value found so far for the minimizer.
+      value = Math.min(value, childVal);
+      // Update beta (the best value for the minimizer).
+      beta = Math.min(beta, value);
+      // If the minimizer's best is no better than the maximizer's best, prune.
+      if (beta <= alpha) break; // Alpha cutoff: no need to check further.
+    }
+    return value;
+  }
+}
+
+// Top-level function to choose the best move from the current state.
+// Uses alpha-beta search to score each possible action, and picks the best.
+function bestmove(state) {
+  // Log for debugging.
+  console.log("Choosing best move with alpha-beta search...");
+  // Get all legal actions for our role in the current state.
+  var actions = findlegals(state, library);
+  // If there are no legal actions, return null (shouldn't usually happen).
+  if (actions.length === 0) return null;
+
+  // Track the best action and its score found so far.
+  var bestAction = actions[0];
+  var bestScore = -Infinity;
+
+  // For each possible action, simulate the result and score it using alpha-beta.
+  for (var i = 0; i < actions.length; i++) {
+    // Simulate the state after taking this action.
+    var newState = simulate(actions[i], state, library);
+    // We start the search with maximizing = false (opponent's turn next).
+    var score = alphabeta(newState, MAX_DEPTH, -Infinity, Infinity, false);
+
+    // If this action is better than any previous, remember it.
+    if (score > bestScore) {
+      bestScore = score;
+      bestAction = actions[i];
+    }
+
+    // If we find a move that guarantees a win, we can stop searching early.
+    if (bestScore === 100) {
+      break; // Early exit: can't do better than a guaranteed win.
+    }
+  }
+
+  // Return the best action found.
+  return bestAction;
+}
+
+
+// Replace the play function with a version that sets the deadline and uses the new bestmove logic.
+function play (move) {
+  // Log the move received from the opponent (or nil if we're first).
+  console.log(move);
+  // If the opponent made a move, update our internal state.
+  if (move !== nil) {
+    state = simulate(move, state, library);
+    isFirstMove = false;
+  }
+
+  // If it's not our turn, return false (shouldn't usually happen).
+  if (findcontrol(state, library) !== role) return false;
+
+  // Set the deadline for this move: current time + playclock (in ms).
+  // This ensures all our search functions can check for timeouts.
+  deadline = Date.now() + playclock * 1000;
+
+  // Use our new alpha-beta search to choose the best move.
+  return bestmove(state);
+}
+
+
+function stop (move)
+ {return false}
+
+function abort ()
+ {return false}
+
+//==============================================================================
+// End of player code
+//==============================================================================
+
+
+  </script>
+</head>
+
+<!--=======================================================================-->
+
+<body bgcolor='#aabbbb' onload='doinitialize()'>
+  <center>
+    <table width='720' cellspacing='0' cellpadding='40' bgcolor='#ffffff'>
+      <tr>
+        <td>
+
+<!--=======================================================================-->
+
+<center>
+  <table width='640' cellpadding='0'>
+    <tr>
+      <td width='180' align='center' valign='center'>
+        <img width='130' src='http://gamemaster.stanford.edu/images/ggp.jpg'/>
+      </td>
+      <td align='center'>
+        <span style='font-size:18pt'>&nbsp;</span>
+        <span style='font-size:32pt'>Gamemaster</span><br/>
+      </td>
+      <td width='180' align='center' style='color:#000066;font-size:18px'>
+        <i>General<br/>Game<br/>Playing</i>
+      </td>
+    </tr>
+  </table>
+</center>
+
+<!--=======================================================================-->
+
+<br/>
+<table width='640' cellpadding='8' cellspacing='0' bgcolor='#f4f8f8' border='1'>
+  <tr height='40'>
+     <td align='center'>
+<table style='color:#000066;font-size:18px'>
+  <tr>
+    <td>
+Protocol: localstorage<br/>
+Metagamer: none<br/>
+Strategy: custom<br/>
+Identifier: <span id='player'>aero</span> <img src="http://gamemaster.stanford.edu/images/pencil.gif" onclick='doplayer()'/>
+    </td>
+  </tr>
+</table>
+    </td>
+  </tr>
+</table>
+<br/>
+
+<!--=======================================================================-->
+
+<center>
+  <br/>
+  <textarea id='transcript' style='font-family:courier' rows='30' cols='80' readonly></textarea>
+</center>
+
+<!--=======================================================================-->
+
+        </td>
+      </tr>
+    </table>
+  </center>
+</body>
+
+<!--=======================================================================-->
+
+</html>
