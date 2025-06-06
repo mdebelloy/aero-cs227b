@@ -1,308 +1,613 @@
 <html>
-
-<!--=======================================================================-->
-
-<head>
-  <title>Aero</title>
-  <script type='text/javascript' src='http://epilog.stanford.edu/javascript/epilog.js'></script>
-  <script type='text/javascript' src='http://gamemaster.stanford.edu/javascript/localstorage.js'></script>
-  <script type='text/javascript' src='http://gamemaster.stanford.edu/interpreter/general.js'></script>
-  <script type='text/javascript'>
-//==============================================================================
-
-
-var manager = 'manager';
-var player = 'aero';
-
-var role = 'robot';
-var rules = [];
-var startclock = 10;
-var playclock = 10;
-
-var library = [];
-var roles = [];
-var state = [];
-
-//==============================================================================
-/*
-Writeup:
-
-1. The legal player was already supplied as the sample player from the website. Simply uploading it
-to gamemaster in the html file under our player's name completed this part of the assignment.
-
-2. The random player was very similar, but the play function had one difference, as noted in 
-class and in the class slides. Instead of simply finding a legal action, we find all legal actions
-and return a randomly chosen one as:
-"return findlegals(state,library)[randomindex(findlegals(state,library).length)]"
-
-3. We then implemented a minimax player for single player games. This looks a lot like the 2 player
-minimax code in the commented out section below, but we only maximize until we get to the end of the 
-game tree. Namely, we look at the current game state and recurse down the game tree looking for the path
-that yields the optimal end reward. Since there is no adversarial player, we simply pick an action 
-that will yield the optimal reward. Since rewards are bound between 0 and 100, we can end the recursion
-early once we find a branch that gives a reward of 100. This helps speed up play time.
-
-4. The minimax player for 2 player games we implemented considers the current game state, and then
-for all possible moves recursively calls the minimax function in the following game state, alternating 
-whether the current player is active or not with each layer of recursion. If the current player
-is active, the minimax player tries to maximize the reward function; otherwise, the minimax
-player tries to minimize the reward function. Our implementation searches the entire game 
-tree for all possible terminal states and chooses whichever state is reached by the minimax 
-algorithm. The code for this implemntation is the following functions commented out below:
- maximize, minimize, bestmove, and minimax.
-
-5. The maximax player our group implemented considers the current game state and current player,
-and then for all possible moves recursively calls the maximax function for the following game 
-state and the next player. The maximax player chooses the move that maximizes the function for 
-the current player. Our implementation searches the entire game tree for all possible terminal 
-states before making its decision, stopping early if it finds a tree that yields a result of 100
-The code is the currently active / not commented out code below, which closely follows the code from lecture.
-
-We note that this implementation does not have a timing mechanism and will time out on more complex
-games where the 10-20 seconds of play time are not enough to explore the whole tree. It can also 
-time out sometimes when going first on tictactoe
-
-*/
-//==============================================================================
-
-
-/* MINIMAX PLAYER COMPLETE
-function maximize(curState) {
-  var actions = findlegals(curState, library);
-  if (actions.length === 0) {return 0;}
-  
-  var score = -1;
-  for (var i = 0; i < actions.length; i++) {
-    var newstate = simulate(actions[i], curState, library);
-    var newscore = minimax(newstate);
-    if (Number(newscore) > Number(score)) {score = newscore;}
-  }
-  return score;
-}
-
-function minimize(curState) {
-  var opponent = roles.filter(r => r !== role)[0];
-  var actions = findlegals(curState, library);
-  if (actions.length === 0) {return 0;}
-  
-  var score = 101; 
-  for (var i = 0; i < actions.length; i++) {
-    var newstate = simulate(actions[i], curState, library);
-    var newscore = minimax(newstate);
-    if (Number(newscore) < Number(score)) {score = newscore;}
-  }
-  return score;
-}
-
-function bestmove(curState) {
-  var actions = findlegals(curState, library);
-  if (actions.length === 0) {return null;}
-  
-  var bestAction = null;
-  var bestScore = -1;
-  
-  for (var i = 0; i < actions.length; i++) {
-    var newstate = simulate(actions[i], curState, library);
-    var newscore = minimax(newstate);
-
-    if (Number(newscore) > Number(bestScore)) {
-      bestScore = Number(newscore);
-      bestAction = actions[i];
-    }
-  }
-
-  return bestAction;
-}
-
-function minimax(curState) {
-  if (findterminalp(curState, library)) {
-    return findreward(role, curState, library);
-  }
-  
-  var active = findcontrol(curState, library);
-  if (active === role) {
-    return maximize(curState);
-  } else {
-    return minimize(curState);
-  }
-}
-*/
-
-
-var isFirstMove = true;
-
-function maximax(state) {
-  //Return rewards for each role at terminal state
-  if (findterminalp(state, library)) {
-    var vector = {};
-    for (var i = 0; i < roles.length; i++) {
-      vector[roles[i]] = findreward(roles[i], state, library) * 1;
-    }
-    return vector;
-  }
-  var active = findcontrol(state, library);
-  var actions = findlegals(state, library);
-  var vector = {};
-  for (var i = 0; i < roles.length; i++) {
-    vector[roles[i]] = -1;
-  }
-  // loop over potential actions and recurse
-  for (var i = 0; i < actions.length; i++) {
-    var newstate = simulate(actions[i], state, library);
-    var newvector = maximax(newstate); 
-    if (Number(newvector[active]) < Number(vector[active])) { continue; }
-    if (Number(newvector[active]) > Number(vector[active])) { vector = newvector; }
-    for (var j = 0; j < roles.length; j++) {
-      if (roles[j] !== active) {
-        vector[roles[j]] = Math.min(vector[roles[j]], newvector[roles[j]]);
-      }
-    }
+  <head>
+    <title>Aero</title>
+    <script type='text/javascript' src='/epilog/javascript/epilog.js'></script>
+    <script type='text/javascript' src='../javascript/localstorage.js'></script>
+    <script type='text/javascript' src='../metagaming/grounder.js'></script>
+    <script type='text/javascript' src='../metagaming/symbolizer.js'></script>
     
-    //early termination for first move only
-    if (isFirstMove && vector[role] == 100) {
-      console.log("returning early")
-      return vector;
-    }
-  }
-  return vector;
-}
+    <script type='text/javascript' src='../reasoning/symbol.js'></script>
+    <script>
+      var symbolFindinits = findinits;
+      var symbolFindlegals = findlegals;
+      var symbolSimulate = simulate;
+      var symbolFindcontrol = findcontrol;
+      var symbolFindterminalp = findterminalp;
+      var symbolFindreward = findreward;
+    </script>
+    
+    <script type='text/javascript' src='../gameplaying/pts.js'></script>
+    <script type='text/javascript' src='../reasoning/ground.js'></script>
+    <script>
+      var generalFindinits = findinits;
+      var generalFindlegals = findlegals;
+      var generalSimulate = simulate;
+      var generalFindcontrol = findcontrol;
+      var generalFindterminalp = findterminalp;
+      var generalFindreward = findreward;
+    </script>
+    <script type='text/javascript' src='../metagaming/pruner.js'></script>
+    <script type='text/javascript' src='../metagaming/optimizer.js'></script>
+    <script type="text/javascript" src="../metagaming/simplifier.js"></script>
+    <script type='text/javascript'>
 
+      //==============================================================================
+      // aero.js
+      //==============================================================================
 
-function bestmove(curState) {
-  console.log("Getting best move");
-  var actions = findlegals(curState, library);
-  if (actions.length === 0) { return null; }
+      /*
 
-  if (isFirstMove) {
-    console.log("First move, decreasing action space");
-    actions = actions.slice(0, 5);
-  }
+      The implementation is MCTS with a couple of modification. Following the cadia player paper
+      found online, we implement UCT and Gibbs Sampling for our move selection. Also, to 
+      decrease variance in depth charges, we run them each four times and average over the four. 
+      This technique is inspired from the hans_magnus player. We spent some time playing with 
+      the hyperparameters and ended up using UCT C = 45, averaging over 4 depth charges, 
+      and using a temperature tau of 2 for Gibbs sampling. The player also avoids
+      direct one turn losses
 
-  var bestAction = actions[0];
-  var bestScore = -1;
+      Our player seems to perform relatively well, especially in games with large state spaces.
+      However, we note that it's objective is simply to maximize it's score without losing,
+      so it has a tendancy to give points to the opponent in games like alquerque, on the 
+      offchance that the other player will mess up and make a non-optimal move. This makes
+      our player best at games where maximizing out own score without care for the opponent's
+      score is best.
 
-  for (var i = 0; i < actions.length; i++) {
-    var newstate = simulate(actions[i], curState, library);
-    var vector = maximax(newstate);
-    var myScore = Number(vector[role]);
+      */
+     
+      var manager = 'manager';
+      var player = 'aero';
 
-    if (myScore > bestScore) {
-      bestScore = myScore;
-      bestAction = actions[i];
-    }
-    if(bestScore == 100){
-        console.log("found best score");
-        console.log("Best action:", bestAction);
-        return bestAction;
-    }
-  }
+      var role = 'robot';
+      var rules = [];
+      var startclock = 10;
+      var playclock = 10;
 
-  console.log("Best action:", bestAction);
+      var library = [];
+      var roles = [];
+      var state = [];
 
-  return bestAction;
-}
+      var tree;
+      var C = 45; // UCT exploration
+      var tau = 2; // temp for gibbs sampling
+      var depthCharges = 0;
+      var nodesExplored = 0;
+      var metrics = true; 
+      var logging = false;
+      var useSymbol = false;
+      var usePrune = true;
+      var actionHistory = {}; 
 
+      var findinitsFn,
+          findlegalsFn,
+          simulateFn,
+          findcontrolFn,
+          findterminalpFn,
+          findrewardFn;
 
+      // shuffle array in place
+      function shuffle(array) {
+        for (var i = array.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var temp = array[i];
+          array[i] = array[j];
+          array[j] = temp;
+        }
+        return array;
+      }
 
-function ping ()
- {return 'ready'}
+      // convert string to number
+      function numberize(str) {
+        return parseInt(str);
+      }
 
-function start (r,rs,sc,pc)
- {role = r;
-  rules = rs.slice(1);
-  startclock = numberize(sc);
-  playclock = numberize(pc);
-  library = definemorerules([],rules);
-  roles = findroles(library);
-  state = findinits(library);
-  console.log("Starting Game!");
-  return 'ready'}
+      // update metrics display in html
+      function updateMetricsDisplay(depthCharges, nodesExplored, moveInfo, moveValue) {
+        const metricsBox = document.getElementById('metrics-box');
+        if (metricsBox) {
+          metricsBox.innerHTML = `
+            <div><strong>Grounding:</strong> ${useSymbol ? "true" : "false"} <strong>Pruning:</strong> ${usePrune ? "true" : "false"}</div>
+            <div><strong>Depth Charges:</strong> ${depthCharges}</div>
+            <div><strong>Nodes Explored:</strong> ${nodesExplored}</div>
+            <div><strong>Move Selection:</strong> ${moveInfo || 'N/A'}</div>
+            <div><strong>Move Value:</strong> ${moveValue !== undefined ? moveValue.toFixed(2) : 'N/A'}</div>
+          `;
+        }
+      }
 
-function play (move)
- {
- console.log(move)
- if (move!==nil) {
-    state = simulate(move,state,library);
-    isFirstMove = false;
-    };
- if (findcontrol(state,library)!==role) {return false};
- return bestmove(state)}
+      // initialize game with rules optimization and precomputation
+      function start(r, rs, sc, pc) {
+        role = r;
+        rules = rs.slice(1);
+        startclock = numberize(sc);
+        playclock = numberize(pc);
 
-function stop (move)
- {return false}
+        depthCharges = 0;
+        nodesExplored = 0;
+        updateMetricsDisplay(depthCharges, nodesExplored);
 
-function abort ()
- {return false}
+        rules = prunerulesubgoals(rules);
+        rules = prunerules(rules);
+        rules = fixrules(rules);
+        
+        rules = definemorerules([], rules);
+        
+        const optimizationDeadline = Date.now() + (startclock / 2) * 1000;
+        const grounded = groundrules(rules, optimizationDeadline - Date.now());
+
+        if (grounded !== false) {
+          try {
+            rules = symbolizerules(grounded);
+            useSymbol = true;
+            
+            findinitsFn = symbolFindinits;
+            findlegalsFn = symbolFindlegals;
+            simulateFn = symbolSimulate;
+            findcontrolFn = symbolFindcontrol;
+            findterminalpFn = symbolFindterminalp;
+            findrewardFn = symbolFindreward;
+            
+            rules = simplifyrules(rules);
+            
+            rules = definemorerules([], rules);
+            rules = pruneprogram(role, rules);
+          } catch (error) {
+            useSymbol = false;
+            rules = grounded;
+            setupGeneralInterpreter();
+          }
+        } else {
+          useSymbol = false;
+          setupGeneralInterpreter();
+        }
+
+        rules = definemorerules([], rules);
+        library = definemorerules([], rules);
+        roles = findroles(library);
+        state = findinitsFn(library);
+        
+        var reward = parseInt(findrewardFn(role, state, library));
+        tree = makeNode(state, null, null);
+        tree.terminal = false;
+
+        const headstartDeadline = Date.now() + startclock * 1000;
+        let iterations = 0;
+
+        while (Date.now() < headstartDeadline) {
+          processMCS(tree);
+          iterations++;
+          
+          if (logging && iterations % 1000 === 0) {
+            var timeRemaining = Math.max(0, (headstartDeadline - Date.now()) / 1000);
+          }
+        }
+
+        updateMetricsDisplay(depthCharges, nodesExplored, "Headstart complete");
+
+        return "ready";
+      }
+
+      // setup the general interpreter functions
+      function setupGeneralInterpreter() {
+        findinitsFn = generalFindinits;
+        findlegalsFn = generalFindlegals;
+        simulateFn = generalSimulate;
+        findcontrolFn = generalFindcontrol;
+        findterminalpFn = generalFindterminalp;
+        findrewardFn = generalFindreward;
+      }
+
+      // play a move in the game with threat detection and mcts
+      function play(rawMove) {
+        var move = rawMove;
+
+        if (useSymbol && move !== nil && move !== null) {
+          move = symbolizeatom(move);
+        }
+
+        if (move !== nil && move !== null) {
+          tree = subtree(move, tree);
+          state = tree.state;
+        }
+
+        if (findcontrolFn(state, library) !== role) {
+          return false;
+        }
+
+        depthCharges = 0;
+        nodesExplored = 0;
+        updateMetricsDisplay(depthCharges, nodesExplored);
+
+        const opponentMoves = findlegalsFn(state, library);
+        const oneturnLosses = opponentMoves.filter(function(opponentMove) {
+          const nextState = simulateFn(opponentMove, state, library);
+          return findterminalpFn(nextState, library) && 
+                parseInt(findrewardFn(role, nextState, library)) === 0;
+        });
+
+        if (oneturnLosses.length > 0) {
+          const myMoves = shuffle(findlegalsFn(state, library));
+          
+          for (let i = 0; i < myMoves.length; i++) {
+            const curMove = myMoves[i];
+            const afterMyMove = simulateFn(curMove, state, library);
+            const opponentReplies = findlegalsFn(afterMyMove, library);
+            
+            if (findterminalpFn(afterMyMove, library) && 
+                parseInt(findrewardFn(role, afterMyMove, library)) === 100) {
+              updateMetricsDisplay(depthCharges, nodesExplored, "Immediate win", 1.0);
+              return useSymbol ? unsymbolizeatom(curMove) : curMove;
+            }
+            
+            if (oneturnLosses.every(function(loss) { 
+              return !opponentReplies.includes(loss); 
+            })) {
+              updateMetricsDisplay(depthCharges, nodesExplored, "Avoiding one-turn loss", 0.5);
+              return useSymbol ? unsymbolizeatom(curMove) : curMove;
+            }
+          }
+        }
+
+        const bestMove = playmcs();
+        return useSymbol ? unsymbolizeatom(bestMove) : bestMove;
+      }
+
+      // run mcts algorithm until time runs out
+      function playmcs() {
+        const deadline = Date.now() + Math.max(playclock - 1, 0) * 1000;
+        let iterations = 0;
+
+        while (Date.now() < deadline && !tree.terminal) {
+          processMCS(tree);
+          iterations++;
+          
+          if (logging && iterations % 1000 === 0) {
+            const timeRemaining = Math.max(0, (deadline - Date.now()) / 1000);
+          }
+        }
+
+        return selectBestMove(tree);
+      }
+
+      // create a new node for the game tree
+      function makeNode(state, parent, move) {
+        nodesExplored++;
+        
+        const terminal = findterminalpFn(state, library);
+        const untried = terminal ? [] : shuffle(findlegalsFn(state, library));
+        
+        return {
+          state: state,
+          parent: parent,
+          move: move,
+          w: 0,
+          n: 0,
+          children: [],
+          untried: untried,
+          terminal: terminal,
+          determined: false
+        };
+      }
+
+      // perform one iteration of monte carlo tree search
+      function processMCS(root) {
+        var node = root;
+
+        while (node.untried.length === 0 && node.children.length > 0 && !node.terminal) {
+          node = bestUCTChild(node);
+        }
+
+        if (node.terminal) {
+          if (!node.determined) {
+            determineTerminal(node);
+          }
+          return;
+        }
+
+        if (node.untried.length > 0) {
+          const move = node.untried.pop();
+          const newState = simulateFn(move, node.state, library);
+          const child = makeNode(newState, node, move);
+          node.children.push(child);
+          
+          if (child.terminal) {
+            determineTerminal(child);
+            node = child;
+          } else {
+            const numProbes = 4;
+            let totalReward = 0;
+            
+            for (let i = 0; i < numProbes; i++) {
+              totalReward += runDepthCharge(child.state);
+            }
+            
+            const avgReward = totalReward / numProbes;
+            backprop(child, avgReward);
+            return;
+          }
+        }
+        
+        if (!node.determined) {
+          const reward = runDepthCharge(node.state);
+          backprop(node, reward);
+        }
+      }
+
+      // update node statistics up the tree
+      function backprop(node, reward) {
+        while (node) {
+          node.n += 1;
+          node.w += reward;
+          node = node.parent;
+        }
+      }
+
+      // evaluate terminal nodes using minimax principles
+      function determineTerminal(node) {
+        node.determined = true;
+        
+        if (findterminalpFn(node.state, library)) {
+          node.w = parseInt(findrewardFn(role, node.state, library));
+          node.n = 1;
+          node.terminal = true;
+        } else {
+          let allDetermined = true;
+          
+          if (node.children.length === 0 && node.untried.length > 0) {
+            while (node.untried.length > 0) {
+              const move = node.untried.pop();
+              const newState = simulateFn(move, node.state, library);
+              const child = makeNode(newState, node, move);
+              node.children.push(child);
+              
+              if (child.terminal) {
+                determineTerminal(child);
+              } else {
+                allDetermined = false;
+              }
+            }
+          }
+          
+          for (let i = 0; i < node.children.length; i++) {
+            if (!node.children[i].determined) {
+              allDetermined = false;
+              break;
+            }
+          }
+          
+          if (allDetermined && node.children.length > 0) {
+            if (findcontrolFn(node.state, library) === role) {
+              let maxReward = node.children[0].w;
+              for (let i = 1; i < node.children.length; i++) {
+                if (node.children[i].w > maxReward) {
+                  maxReward = node.children[i].w;
+                }
+              }
+              node.w = maxReward;
+            } else {
+              let minReward = node.children[0].w;
+              for (let i = 1; i < node.children.length; i++) {
+                if (node.children[i].w < minReward) {
+                  minReward = node.children[i].w;
+                }
+              }
+              node.w = minReward;
+            }
+            
+            node.n = 1;
+            node.terminal = true;
+            
+            if (node.parent) {
+              if ((node.w === 100 && findcontrolFn(node.parent.state, library) === role) ||
+                  (node.w === 0 && findcontrolFn(node.parent.state, library) !== role)) {
+                determineTerminal(node.parent);
+              }
+            }
+          } else {
+            node.determined = false;
+          }
+        }
+      }
+
+      // select best child node using uct formula
+      function bestUCTChild(node) {
+        var bestScore = -Infinity;
+        var bestNode = null;
+
+        for (var i = 0; i < node.children.length; i++) {
+          const child = node.children[i];
+          
+          if (child.determined && child.terminal && child.w === 0) {
+            continue;
+          }
+          
+          if (child.determined && child.terminal && child.w === 100) {
+            return child;
+          }
+          
+          if (child.n === 0) {
+            return child;
+          }
+          
+          const exploit = child.w / child.n;
+          const explore = C * Math.sqrt(Math.log(node.n) / child.n);
+          const score = exploit + explore;
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestNode = child;
+          }
+        }
+
+        return bestNode || node.children[0];
+      }
+
+      // find or create subtree for a given move
+      function subtree(move, node) {
+        if (!node.children || node.children.length === 0) {
+          const newState = simulateFn(move, node.state, library);
+          return makeNode(newState, null, null);
+        }
+        
+        for (var i = 0; i < node.children.length; i++) {
+          if (equalp(move, node.children[i].move)) {
+            node.children[i].parent = null;
+            return node.children[i];
+          }
+        }
+        
+        const newState = simulateFn(move, node.state, library);
+        return makeNode(newState, null, null);
+      }
+
+      // select best move based on tree statistics
+      function selectBestMove(root) {
+        if (!root.children || root.children.length === 0) {
+          const legals = findlegalsFn(root.state, library);
+          return legals.length > 0 ? legals[0] : null;
+        }
+        
+        for (let i = 0; i < root.children.length; i++) {
+          const child = root.children[i];
+          
+          if (child.determined && child.terminal && child.w === 100) {
+            updateMetricsDisplay(depthCharges, nodesExplored, "Proven win", 1.0);
+            return child.move;
+          }
+        }
+        
+        const viableChildren = root.children.filter(function(child) {
+          return !(child.determined && child.terminal && child.w === 0);
+        });
+        
+        if (viableChildren.length === 0) {
+          const bestChild = root.children.reduce(function(best, current) {
+            return current.n > best.n ? current : best;
+          }, root.children[0]);
+          
+          updateMetricsDisplay(depthCharges, nodesExplored, "Delaying loss", bestChild.w / bestChild.n);
+          return bestChild.move;
+        }
+        
+        let bestChild = viableChildren[0];
+        let bestValue = bestChild.w / bestChild.n;
+        
+        for (let i = 1; i < viableChildren.length; i++) {
+          const child = viableChildren[i];
+          const value = child.w / child.n;
+          
+          if (value > bestValue) {
+            bestValue = value;
+            bestChild = child;
+          }
+        }
+        
+        updateMetricsDisplay(depthCharges, nodesExplored, 
+                           "MCTS selection (" + bestChild.n + " visits)", 
+                           bestChild.w / bestChild.n);
+        
+        return bestChild.move;
+      }
+
+      // perform random playout to terminal state
+      function runDepthCharge(s) {
+        depthCharges++;
+        var state = s;
+        var reward = 0;
+
+        while (!findterminalpFn(state, library)) {
+          const moves = findlegalsFn(state, library);
+          if (moves.length === 0) break;
+          
+          state = simulateFn(moves[Math.floor(Math.random() * moves.length)], state, library);
+        }
+
+        reward = parseInt(findrewardFn(role, state, library), 10);
+        return reward;
+      }
+
+      function stop(move) { 
+        return false; 
+      }
+
+      function abort() { 
+        return false; 
+      }
+
+      function ping() { 
+        return "ready"; 
+      }
 
 //==============================================================================
 // End of player code
 //==============================================================================
-  </script>
-</head>
+      </script>
+  </head>
 
-<!--=======================================================================-->
+  <body bgcolor='#aabbbb' onload='doinitialize()'>
+    <center>
+      <table width='720' cellspacing='0' cellpadding='40' bgcolor='#ffffff'>
+        <tr>
+          <td>
 
-<body bgcolor='#aabbbb' onload='doinitialize()'>
-  <center>
-    <table width='720' cellspacing='0' cellpadding='40' bgcolor='#ffffff'>
-      <tr>
-        <td>
+            <center>
+              <table width='640' cellpadding='0'>
+                <tr>
+                  <td width='180' align='center' valign='center'>
+                    <img width='130' src='http://gamemaster.stanford.edu/images/ggp.jpg'/>
+                  </td>
+                  <td align='center'>
+                    <span style='font-size:18pt'>&nbsp;</span>
+                    <span style='font-size:32pt'>Gamemaster</span><br/>
+                  </td>
+                  <td width='180' align='center' style='color:#000066;font-size:18px'>
+                    <i>General<br/>Game<br/>Playing</i>
+                  </td>
+                </tr>
+              </table>
+            </center>
 
-<!--=======================================================================-->
+            <br/>
+            <table width='640' cellpadding='8' cellspacing='0' bgcolor='#f4f8f8' border='1'>
+              <tr height='40'>
+                 <td align='center'>
+                  <table style='color:#000066;font-size:18px'>
+                    <tr>
+                      <td>
+                  Protocol: localstorage<br/>
+                  Strategy: mcts + Gibbs Sampling + immediate loss prevention <br/>
+                  Identifier: <span id='player'>aero</span> <img src="http://gamemaster.stanford.edu/images/pencil.gif" onclick='doplayer()'/>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+            <br/>
 
-<center>
-  <table width='640' cellpadding='0'>
-    <tr>
-      <td width='180' align='center' valign='center'>
-        <img width='130' src='http://gamemaster.stanford.edu/images/ggp.jpg'/>
-      </td>
-      <td align='center'>
-        <span style='font-size:18pt'>&nbsp;</span>
-        <span style='font-size:32pt'>Gamemaster</span><br/>
-      </td>
-      <td width='180' align='center' style='color:#000066;font-size:18px'>
-        <i>General<br/>Game<br/>Playing</i>
-      </td>
-    </tr>
-  </table>
-</center>
+            <!-- New metrics box -->
+            <table width='640' cellpadding='8' cellspacing='0' bgcolor='#e8f0f0' border='1'>
+              <tr>
+                <td>
+                  <div style='color:#000066;font-weight:bold;font-size:18px;margin-bottom:5px;'>MCTS Metrics</div>
+                  <div id='metrics-box' style='font-family:courier;font-size:14px;'>
+                    <div><strong>Depth Charges:</strong> 0</div>
+                    <div><strong>Nodes Explored:</strong> 0</div>
+                    <div><strong>Move Selection:</strong> N/A</div>
+                    <div><strong>Move Value:</strong> N/A</div>
+                  </div>
+                </td>
+              </tr>
+            </table>
+            <br/>
 
-<!--=======================================================================-->
+            <center>
+              <br/>
+              <textarea id='transcript' style='font-family:courier' rows='30' cols='80' readonly></textarea>
+            </center>
 
-<br/>
-<table width='640' cellpadding='8' cellspacing='0' bgcolor='#f4f8f8' border='1'>
-  <tr height='40'>
-     <td align='center'>
-<table style='color:#000066;font-size:18px'>
-  <tr>
-    <td>
-Protocol: localstorage<br/>
-Metagamer: none<br/>
-Strategy: custom<br/>
-Identifier: <span id='player'>aero</span> <img src="http://gamemaster.stanford.edu/images/pencil.gif" onclick='doplayer()'/>
-    </td>
-  </tr>
-</table>
-    </td>
-  </tr>
-</table>
-<br/>
-
-<!--=======================================================================-->
-
-<center>
-  <br/>
-  <textarea id='transcript' style='font-family:courier' rows='30' cols='80' readonly></textarea>
-</center>
-
-<!--=======================================================================-->
-
-        </td>
-      </tr>
-    </table>
-  </center>
-</body>
-
-<!--=======================================================================-->
-
+          </td>
+        </tr>
+      </table>
+    </center>
+  </body>
 </html>
